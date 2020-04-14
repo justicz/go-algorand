@@ -524,6 +524,7 @@ func (cx *evalContext) step() {
 			}
 		}
 		fmt.Fprintf(cx.Trace, "%3d %s%s=> %s\n", cx.pc, spec.Name, immArgsString, stackString)
+		fmt.Fprintf(cx.Trace, "stack %d: %v\n", len(cx.stack), cx.stack)
 	}
 	if cx.err != nil {
 		return
