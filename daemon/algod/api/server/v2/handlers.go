@@ -92,24 +92,64 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 	}
 	amountWithoutPendingRewards := recordWithoutPendingRewards.MicroAlgos
 
-	assetsCreators := make(map[basics.AssetIndex]string, len(record.Assets))
-	if len(record.Assets) > 0 {
-		//assets = make(map[uint64]v1.AssetHolding)
-		for curid := range record.Assets {
-			var creator string
-			creatorAddr, ok, err := myLedger.GetAssetCreator(curid)
-			if err == nil && ok {
-				creator = creatorAddr.String()
-			} else {
-				// Asset may have been deleted, so we can no
-				// longer fetch the creator
-				creator = ""
-			}
-			assetsCreators[curid] = creator
+	assetsCreators := getAssetCreatorsForHoldings(myLedger, record.Assets)
+	account, err := AccountDataToAccount(address, &record, assetsCreators, lastRound, amountWithoutPendingRewards)
+	if err != nil {
+		return internalError(ctx, err, errInternalFailure, v2.Log)
+	}
+
+	response := generated.AccountResponse(account)
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// AccountInformationCreatorOf gets account information for a creator of an asset or application
+// (GET /v2/accounts/creator/{ident})
+func (v2 *Handlers) AccountInformationCreatorOf(ctx echo.Context, ident uint64, params generated.AccountInformationCreatorOfParams) error {
+	handle, contentType, err := getCodecHandle(params.Format)
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+
+	ledger := v2.Node.Ledger()
+	aidx := basics.AssetIndex(ident)
+	creator, ok, err := ledger.GetAssetCreator(aidx)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+	if !ok {
+		appIdx := basics.AppIndex(ident)
+		creator, ok, err = ledger.GetAppCreator(appIdx)
+		if err != nil {
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+		if !ok {
+			err = fmt.Errorf("asset or app %d does not exist", ident)
+			return notFound(ctx, err, err.Error(), v2.Log)
 		}
 	}
 
-	account, err := AccountDataToAccount(address, &record, assetsCreators, lastRound, amountWithoutPendingRewards)
+	lastRound := ledger.Latest()
+	record, err := ledger.Lookup(lastRound, creator)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	if handle == protocol.CodecHandle {
+		data, err := encode(handle, record)
+		if err != nil {
+			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+		}
+		return ctx.Blob(http.StatusOK, contentType, data)
+	}
+
+	recordWithoutPendingRewards, err := ledger.LookupWithoutRewards(lastRound, creator)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+	amountWithoutPendingRewards := recordWithoutPendingRewards.MicroAlgos
+
+	assetsCreators := getAssetCreatorsForHoldings(ledger, record.Assets)
+	account, err := AccountDataToAccount(creator.String(), &record, assetsCreators, lastRound, amountWithoutPendingRewards)
 	if err != nil {
 		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}

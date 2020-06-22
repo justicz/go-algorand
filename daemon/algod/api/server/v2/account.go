@@ -21,6 +21,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -333,4 +334,24 @@ func ApplicationParamsToAppParams(gap *generated.ApplicationParams) basics.AppPa
 	ap.GlobalState = convertGeneratedTKV(gap.GlobalState)
 
 	return ap
+}
+
+func getAssetCreatorsForHoldings(ledger *data.Ledger, holdings map[basics.AssetIndex]basics.AssetHolding) map[basics.AssetIndex]string {
+	assetsCreators := make(map[basics.AssetIndex]string, len(holdings))
+	if len(holdings) > 0 {
+		//assets = make(map[uint64]v1.AssetHolding)
+		for curid := range holdings {
+			var creator string
+			creatorAddr, ok, err := ledger.GetAssetCreator(curid)
+			if err == nil && ok {
+				creator = creatorAddr.String()
+			} else {
+				// Asset may have been deleted, so we can no
+				// longer fetch the creator
+				creator = ""
+			}
+			assetsCreators[curid] = creator
+		}
+	}
+	return assetsCreators
 }

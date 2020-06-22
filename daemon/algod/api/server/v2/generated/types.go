@@ -564,6 +564,13 @@ type TransactionParametersResponse struct {
 	MinFee uint64 `json:"min-fee"`
 }
 
+// AccountInformationCreatorOfParams defines parameters for AccountInformationCreatorOf.
+type AccountInformationCreatorOfParams struct {
+
+	// Configures whether the response object is JSON or MessagePack encoded.
+	Format *string `json:"format,omitempty"`
+}
+
 // AccountInformationParams defines parameters for AccountInformation.
 type AccountInformationParams struct {
 

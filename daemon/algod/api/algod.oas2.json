@@ -229,6 +229,74 @@
         }
       ]
     },
+    "/v2/accounts/creator/{ident}": {
+      "get": {
+        "description": "Retrieves account information for the creator of an asset or application",
+        "produces": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get account information for the creator of an asset or application.",
+        "operationId": "AccountInformationCreatorOf",
+        "parameters": [
+          {
+            "$ref": "#/parameters/format"
+          },
+          {
+            "name": "ident",
+            "type": "integer",
+            "description": "",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/AccountResponse"
+          },
+          "400": {
+            "description": "Malformed address",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "string",
+          "name": "ident",
+          "in": "path",
+          "required": true
+        },
+        {
+          "enum": [
+            "json",
+            "msgpack"
+          ],
+          "type": "string",
+          "name": "format",
+          "in": "query"
+        }
+      ]
+    },
     "/v2/blocks/{round}": {
       "get": {
         "produces": [
