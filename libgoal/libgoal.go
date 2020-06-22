@@ -665,7 +665,7 @@ func (c *Client) AccountData(account string) (accountData basics.AccountData, er
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		var resp []byte
-		resp, err = algod.RawAccountInformationV2(account)
+		resp, err = algod.AccountInformationRawV2(account)
 		if err == nil {
 			err = protocol.Decode(resp, &accountData)
 		}
@@ -683,10 +683,44 @@ func (c *Client) AssetInformation(index uint64) (resp v1.AssetParams, err error)
 }
 
 // ApplicationInformation takes an app's index and returns its information
-func (c *Client) ApplicationInformation(index uint64) (resp v1.AppParams, err error) {
+func (c *Client) ApplicationInformation(index uint64) (creator string, app generatedV2.Application, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err = algod.ApplicationInformation(index)
+		var account generatedV2.Account
+		account, err = algod.AccountInformationCreatorOf(index)
+		if err == nil {
+			creator = account.Address
+			if account.CreatedApps != nil {
+				for _, a := range *account.CreatedApps {
+					if a.AppIndex == index {
+						app = a
+						break
+					}
+				}
+			}
+		}
+	}
+	return
+}
+
+// ApplicationCreatorInformation takes an app's index and returns its creator's account info
+func (c *Client) ApplicationCreatorInformation(index uint64) (resp generatedV2.Account, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AccountInformationCreatorOf(index)
+	}
+	return
+}
+
+// CreatorBalanceRecord takes an app's index and returns its creator's account info
+func (c *Client) CreatorBalanceRecord(index uint64) (br basics.BalanceRecord, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		var resp []byte
+		resp, err = algod.AccountInformationCreatorOfRaw(index)
+		if err == nil {
+			err = protocol.Decode(resp, &br)
+		}
 	}
 	return
 }
@@ -927,12 +961,11 @@ func MakeDryrunState(client Client, txnOrStxn interface{}, other []transactions.
 				appIdx = defaultAppIdx
 			} else {
 				// otherwise need to fetch app state
-				var params v1.AppParams
-				if params, err = client.ApplicationInformation(uint64(tx.ApplicationID)); err != nil {
+				var params generatedV2.Application
+				if creator, params, err = client.ApplicationInformation(uint64(tx.ApplicationID)); err != nil {
 					return
 				}
-				appParams = convertAppParams(&params)
-				creator = params.Creator
+				appParams = params.AppParams
 			}
 			dr.Apps = append(dr.Apps, generatedV2.DryrunApp{
 				Creator:  creator,

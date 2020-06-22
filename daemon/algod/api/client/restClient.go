@@ -316,10 +316,10 @@ func (client RestClient) Assets(assetIdx, max uint64) (response v1.AssetList, er
 	return
 }
 
-// ApplicationInformation gets the ApplicationInformationResponse associated
-// with the passed application index
-func (client RestClient) ApplicationInformation(index uint64) (response v1.AppParams, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/application/%d", index), nil)
+// AccountInformationCreatorOf gets the v2.Account associated
+// with the passed asset or application index
+func (client RestClient) AccountInformationCreatorOf(index uint64) (response generatedV2.Account, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/creator/%d", index), nil)
 	return
 }
 
@@ -329,7 +329,7 @@ func (client RestClient) AccountInformation(address string) (response v1.Account
 	return
 }
 
-// AccountInformationV2 gets the AccountData associated with the passed address
+// AccountInformationV2 gets the account info associated with the passed address
 func (client RestClient) AccountInformationV2(address string) (response generatedV2.Account, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s", address), nil)
 	return
@@ -343,11 +343,18 @@ func (blob *Blob) SetBytes(b []byte) {
 	*blob = b
 }
 
-// RawAccountInformationV2 gets the raw AccountData associated with the passed address
-func (client RestClient) RawAccountInformationV2(address string) (response []byte, err error) {
+// AccountInformationRawV2 gets the raw AccountData associated with the passed address
+func (client RestClient) AccountInformationRawV2(address string) (response []byte, err error) {
 	var blob Blob
 	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s", address), rawAccountParams{Format: "msgpack"})
 	response = blob
+	return
+}
+
+// AccountInformationCreatorOfRaw gets the basics.BalanceRecord associated
+// with the passed asset or application index
+func (client RestClient) AccountInformationCreatorOfRaw(index uint64) (response []byte, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/creator/%d", index), rawAccountParams{Format: "msgpack"})
 	return
 }
 

@@ -135,7 +135,7 @@ func (v2 *Handlers) AccountInformationCreatorOf(ctx echo.Context, ident uint64, 
 	}
 
 	if handle == protocol.CodecHandle {
-		data, err := encode(handle, record)
+		data, err := encode(handle, basics.BalanceRecord{Addr: creator, AccountData: record})
 		if err != nil {
 			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 		}

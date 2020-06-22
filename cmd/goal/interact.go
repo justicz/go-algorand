@@ -28,7 +28,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/crypto"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -670,16 +669,15 @@ var appQueryCmd = &cobra.Command{
 		}
 
 		enckey := base64.StdEncoding.EncodeToString([]byte(meta.Key))
-		var tealval v1.TealValue
+		var tealval basics.TealValue
 		if scope == "local" {
 			// Fetching local state. Get account information
-			response, err := client.AccountInformation(account)
+			ad, err := client.AccountData(account)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
-
 			// Get application local state
-			local, ok := response.AppLocalStates[appIdx]
+			local, ok := ad.AppLocalStates[basics.AppIndex(appIdx)]
 			if !ok {
 				reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
 			}
@@ -690,9 +688,14 @@ var appQueryCmd = &cobra.Command{
 
 		if scope == "global" {
 			// Fetching global state. Get application information
-			params, err := client.ApplicationInformation(appIdx)
+			br, err := client.CreatorBalanceRecord(appIdx)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
+			}
+
+			params, ok := br.AppParams[basics.AppIndex(appIdx)]
+			if !ok {
+				reportErrorf(errorNoSuchApplication, appIdx)
 			}
 
 			kv := params.GlobalState
@@ -702,20 +705,20 @@ var appQueryCmd = &cobra.Command{
 		var decoded string
 		switch meta.Kind {
 		case "int", "integer":
-			if tealval.Type == "" {
+			if tealval.Type == 0 {
 				if meta.Explicit {
 					reportErrorf("%s not set for %s.%s", param, appIdx, storeName)
 				}
-			} else if tealval.Type != "u" {
+			} else if tealval.Type != basics.TealUintType {
 				reportErrorf("Expected kind %s but got teal type %s", meta.Kind, tealval.Type)
 			}
 			decoded = fmt.Sprintf("%d", tealval.Uint)
 		default:
-			if tealval.Type == "" {
+			if tealval.Type == 0 {
 				if meta.Explicit {
 					reportErrorf("%s not set for %s.%s", param, appIdx, storeName)
 				}
-			} else if tealval.Type != "b" {
+			} else if tealval.Type != basics.TealBytesType {
 				reportErrorf("Expected kind %s but got teal type %s", meta.Kind, tealval.Type)
 			}
 			raw, err := base64.StdEncoding.DecodeString(tealval.Bytes)
