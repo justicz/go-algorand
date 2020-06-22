@@ -257,8 +257,12 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 }
 
 // TransactionDryRun takes transactions and additional simulated ledger state and returns debugging information.
-// (POST /v2/transactions/dryrun)
+// (POST /v2/teal/dryrun)
 func (v2 *Handlers) TransactionDryRun(ctx echo.Context) error {
+	// TODO: enable after merge from master
+	// if !v2.Node.Config().EnableDeveloperAPI {
+	// 	return ctx.String(http.StatusNotFound, "/teal/dryrun was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
+	// }
 	req := ctx.Request()
 	dec := protocol.NewJSONDecoder(req.Body)
 	var gdr generated.DryrunRequest
