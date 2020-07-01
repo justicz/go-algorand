@@ -1023,7 +1023,7 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/responses/DryRunResponse"
+            "$ref": "#/responses/DryrunResponse"
           },
           "400": {
             "description": "Bad Request",
@@ -1512,7 +1512,7 @@
         }
       }
     },
-    "DryRunState": {
+    "DryrunState": {
       "description": "Stores the TEAL eval step data",
       "type": "object",
       "required": [
@@ -1547,8 +1547,8 @@
         }
       }
     },
-    "DryRunTxnResult": {
-      "description": "DryRunTxnResult contains any LogicSig or ApplicationCall program debug information and state updates from a dryrun.",
+    "DryrunTxnResult": {
+      "description": "DryrunTxnResult contains any LogicSig or ApplicationCall program debug information and state updates from a dryrun.",
       "type": "object",
       "required": [
         "disassembly"
@@ -1564,7 +1564,7 @@
         "logic-sig-trace": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/DryRunState"
+            "$ref": "#/definitions/DryrunState"
           }
         },
         "logic-sig-messages": {
@@ -1576,7 +1576,7 @@
         "app-call-trace": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/DryRunState"
+            "$ref": "#/definitions/DryrunState"
           }
         },
         "app-call-messages": {
@@ -1673,7 +1673,7 @@
         }
       }
     },
-    "DryRunRequest": {
+    "DryrunRequest": {
       "description": "Request data type for dryrun endpoint. Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.",
       "type": "object",
       "required": [
@@ -1704,7 +1704,7 @@
         "apps": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/DryRunApp"
+            "$ref": "#/definitions/DryrunApp"
           }
         },
         "protocol-version": {
@@ -1724,13 +1724,13 @@
         "sources": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/DryRunSource"
+            "$ref": "#/definitions/DryrunSource"
           }
         }
       }
     },
-    "DryRunApp": {
-      "description": "DryRunApp holds global app state for a dryrun call.",
+    "DryrunApp": {
+      "description": "DryrunApp holds global app state for a dryrun call.",
       "type": "object",
       "required": [
         "creator",
@@ -1750,8 +1750,8 @@
         }
       }
     },
-    "DryRunSource": {
-      "description": "DryRunSource is TEAL source text that gets uploaded, compiled, and inserted into transactions or application state.",
+    "DryrunSource": {
+      "description": "DryrunSource is TEAL source text that gets uploaded, compiled, and inserted into transactions or application state.",
       "type": "object",
       "required": [
         "field-name",
@@ -2273,8 +2273,8 @@
         }
       }
     },
-    "DryRunResponse": {
-      "description": "DryRunResponse contains per-txn debug information from a dryrun.",
+    "DryrunResponse": {
+      "description": "DryrunResponse contains per-txn debug information from a dryrun.",
       "schema": {
         "type": "object",
         "required": [
@@ -2285,7 +2285,7 @@
           "txns": {
             "type": "array",
             "items": {
-              "$ref": "#/definitions/DryRunTxnResult"
+              "$ref": "#/definitions/DryrunTxnResult"
             }
           },
           "error": {
