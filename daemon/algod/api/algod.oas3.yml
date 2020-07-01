@@ -236,7 +236,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/ApplicationInformation"
+              "$ref": "#/components/schemas/Application"
             }
           }
         },
@@ -246,7 +246,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/AssetInformation"
+              "$ref": "#/components/schemas/Asset"
             }
           }
         },
@@ -778,35 +778,22 @@
       "Application": {
         "description": "Application index and its parameters",
         "properties": {
-          "app-index": {
-            "description": "\\[appidx\\] application index.",
-            "type": "integer"
-          },
-          "app-params": {
-            "$ref": "#/components/schemas/ApplicationParams"
-          }
-        },
-        "required": [
-          "app-index",
-          "app-params"
-        ],
-        "type": "object"
-      },
-      "ApplicationInformation": {
-        "description": "Information about the application including creator",
-        "properties": {
-          "application": {
-            "$ref": "#/components/schemas/Application"
-          },
           "creator": {
             "description": "Application creator",
             "type": "string",
             "x-algorand-format": "Address"
+          },
+          "id": {
+            "description": "\\[appidx\\] application index.",
+            "type": "integer"
+          },
+          "params": {
+            "$ref": "#/components/schemas/ApplicationParams"
           }
         },
         "required": [
-          "application",
-          "creator"
+          "id",
+          "params"
         ],
         "type": "object"
       },
@@ -829,7 +816,7 @@
       "ApplicationLocalStates": {
         "description": "Pair of application index and application local state",
         "properties": {
-          "app-index": {
+          "id": {
             "type": "integer"
           },
           "state": {
@@ -837,7 +824,7 @@
           }
         },
         "required": [
-          "app-index",
+          "id",
           "state"
         ],
         "type": "object"
@@ -894,6 +881,11 @@
       "Asset": {
         "description": "Specifies both the unique identifier and the parameters for an asset",
         "properties": {
+          "creator": {
+            "description": "Asset creator",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
           "index": {
             "description": "unique asset identifier",
             "type": "integer"
@@ -935,24 +927,6 @@
           "asset-id",
           "creator",
           "is-frozen"
-        ],
-        "type": "object"
-      },
-      "AssetInformation": {
-        "description": "Information about the asset including creator",
-        "properties": {
-          "asset": {
-            "$ref": "#/components/schemas/Asset"
-          },
-          "creator": {
-            "description": "Asset creator",
-            "type": "string",
-            "x-algorand-format": "Address"
-          }
-        },
-        "required": [
-          "asset",
-          "creator"
         ],
         "type": "object"
       },
@@ -1023,20 +997,20 @@
       "DryrunApp": {
         "description": "DryrunApp holds global app state for a dryrun call.",
         "properties": {
-          "app-index": {
-            "type": "integer",
-            "x-algorand-format": "uint64"
-          },
           "creator": {
             "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "x-algorand-format": "uint64"
           },
           "params": {
             "$ref": "#/components/schemas/ApplicationParams"
           }
         },
         "required": [
-          "app-index",
           "creator",
+          "id",
           "params"
         ],
         "type": "object"
@@ -1100,13 +1074,12 @@
       "DryrunSource": {
         "description": "DryrunSource is TEAL source text that gets uploaded, compiled, and inserted into transactions or application state.",
         "properties": {
-          "app-index": {
-            "type": "integer",
-            "x-algorand-format": "uint64"
-          },
           "field-name": {
             "description": "FieldName is what kind of sources this is. If lsig then it goes into the transactions[this.TxnIndex].LogicSig. If approv or clearp it goes into the Approval Program or Clear State Program of application[this.AppIndex].",
             "type": "string"
+          },
+          "id": {
+            "type": "integer"
           },
           "source": {
             "type": "string"
@@ -1116,8 +1089,8 @@
           }
         },
         "required": [
-          "app-index",
           "field-name",
+          "id",
           "source",
           "txn-index"
         ],
@@ -1696,7 +1669,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApplicationInformation"
+                  "$ref": "#/components/schemas/Application"
                 }
               }
             },
@@ -1770,7 +1743,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AssetInformation"
+                  "$ref": "#/components/schemas/Asset"
                 }
               }
             },

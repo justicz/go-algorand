@@ -104,21 +104,14 @@ type AccountStateDelta struct {
 // Application defines model for Application.
 type Application struct {
 
+	// Application creator
+	Creator *string `json:"creator,omitempty"`
+
 	// \[appidx\] application index.
-	AppIndex uint64 `json:"app-index"`
+	Id uint64 `json:"id"`
 
 	// Stores the global information associated with an application.
-	AppParams ApplicationParams `json:"app-params"`
-}
-
-// ApplicationInformation defines model for ApplicationInformation.
-type ApplicationInformation struct {
-
-	// Application index and its parameters
-	Application Application `json:"application"`
-
-	// Application creator
-	Creator string `json:"creator"`
+	Params ApplicationParams `json:"params"`
 }
 
 // ApplicationLocalState defines model for ApplicationLocalState.
@@ -133,7 +126,7 @@ type ApplicationLocalState struct {
 
 // ApplicationLocalStates defines model for ApplicationLocalStates.
 type ApplicationLocalStates struct {
-	AppIndex uint64 `json:"app-index"`
+	Id uint64 `json:"id"`
 
 	// Stores local state associated with an application.
 	State ApplicationLocalState `json:"state"`
@@ -171,6 +164,9 @@ type ApplicationStateSchema struct {
 // Asset defines model for Asset.
 type Asset struct {
 
+	// Asset creator
+	Creator *string `json:"creator,omitempty"`
+
 	// unique asset identifier
 	Index uint64 `json:"index"`
 
@@ -197,16 +193,6 @@ type AssetHolding struct {
 
 	// \[f\] whether or not the holding is frozen.
 	IsFrozen bool `json:"is-frozen"`
-}
-
-// AssetInformation defines model for AssetInformation.
-type AssetInformation struct {
-
-	// Specifies both the unique identifier and the parameters for an asset
-	Asset Asset `json:"asset"`
-
-	// Asset creator
-	Creator string `json:"creator"`
 }
 
 // AssetParams defines model for AssetParams.
@@ -251,8 +237,8 @@ type AssetParams struct {
 
 // DryrunApp defines model for DryrunApp.
 type DryrunApp struct {
-	AppIndex uint64 `json:"app-index"`
-	Creator  string `json:"creator"`
+	Creator string `json:"creator"`
+	Id      uint64 `json:"id"`
 
 	// Stores the global information associated with an application.
 	Params ApplicationParams `json:"params"`
@@ -277,10 +263,10 @@ type DryrunRequest struct {
 
 // DryrunSource defines model for DryrunSource.
 type DryrunSource struct {
-	AppIndex uint64 `json:"app-index"`
 
 	// FieldName is what kind of sources this is. If lsig then it goes into the transactions[this.TxnIndex].LogicSig. If approv or clearp it goes into the Approval Program or Clear State Program of application[this.AppIndex].
 	FieldName string `json:"field-name"`
+	Id        uint64 `json:"id"`
 	Source    string `json:"source"`
 	TxnIndex  uint64 `json:"txn-index"`
 }
@@ -459,10 +445,10 @@ type TxType string
 type AccountResponse Account
 
 // ApplicationResponse defines model for ApplicationResponse.
-type ApplicationResponse ApplicationInformation
+type ApplicationResponse Application
 
 // AssetResponse defines model for AssetResponse.
-type AssetResponse AssetInformation
+type AssetResponse Asset
 
 // BlockResponse defines model for BlockResponse.
 type BlockResponse struct {
