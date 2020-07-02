@@ -1194,11 +1194,6 @@
           "description": "unique asset identifier",
           "type": "integer"
         },
-        "creator": {
-          "description": "Asset creator",
-          "type": "string",
-          "x-algorand-format": "Address"
-        },
         "params": {
           "$ref": "#/definitions/AssetParams"
         }
@@ -1488,6 +1483,11 @@
         "clear-state-program"
       ],
       "properties": {
+        "creator": {
+          "description": "The address that created this application. This is the address where the parameters and global state for this application can be found.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
         "approval-program": {
           "description": "\\[approv\\] approval program.",
           "type": "string",
