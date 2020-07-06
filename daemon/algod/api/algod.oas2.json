@@ -1464,11 +1464,6 @@
           "description": "\\[appidx\\] application index.",
           "type": "integer"
         },
-        "creator": {
-          "description": "Application creator",
-          "type": "string",
-          "x-algorand-format": "Address"
-        },
         "params": {
           "description": "\\[appparams\\] application parameters.",
           "$ref": "#/definitions/ApplicationParams"
