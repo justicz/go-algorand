@@ -311,7 +311,7 @@ type EvalDelta struct {
 	Action uint64 `json:"action"`
 
 	// \[bs\] bytes value.
-	Bytes *string `json:"bytes,omitempty"`
+	Bytes *[]byte `json:"bytes,omitempty"`
 
 	// \[ui\] uint value.
 	Uint *uint64 `json:"uint,omitempty"`
@@ -343,7 +343,7 @@ type TealKeyValueStore []TealKeyValue
 type TealValue struct {
 
 	// \[tb\] bytes value.
-	Bytes string `json:"bytes"`
+	Bytes []byte `json:"bytes"`
 
 	// \[tt\] value type.
 	Type uint64 `json:"type"`

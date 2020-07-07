@@ -1388,7 +1388,8 @@
         },
         "bytes": {
           "description": "\\[tb\\] bytes value.",
-          "type": "string"
+          "type": "string",
+          "format": "byte"
         },
         "uint": {
           "description": "\\[ui\\] uint value.",
@@ -1413,7 +1414,8 @@
       ],
       "properties": {
         "address": {
-          "type": "string"
+          "type": "string",
+          "x-algorand-format": "Address"
         },
         "delta": {
           "$ref": "#/definitions/StateDelta"
@@ -1449,7 +1451,8 @@
         },
         "bytes": {
           "description": "\\[bs\\] bytes value.",
-          "type": "string"
+          "type": "string",
+          "format": "byte"
         },
         "uint": {
           "description": "\\[ui\\] uint value.",
