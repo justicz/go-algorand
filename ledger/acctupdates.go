@@ -383,6 +383,18 @@ func (au *accountUpdates) committedUpTo(rnd basics.Round) basics.Round {
 	}
 
 	newBase := rnd - lookback
+
+	// If we're about to write the round where we want to stop...
+	panicAfter := false
+	roundToStop := basics.Round(1000)
+	if newBase >= roundToStop {
+		// only catch up the database to the round we want to stop
+		newBase = roundToStop
+
+		// panic after we're done
+		panicAfter = true
+	}
+
 	if newBase <= au.dbRound {
 		// Already forgotten
 		return au.dbRound
@@ -474,6 +486,11 @@ func (au *accountUpdates) committedUpTo(rnd basics.Round) basics.Round {
 	au.assetDeltas = au.assetDeltas[offset:]
 	au.dbRound = newBase
 	au.lastFlushTime = flushTime
+
+	if panicAfter {
+		au.log.Panicf("maxj: stopping on round %d", newBase)
+	}
+
 	return au.dbRound
 }
 
