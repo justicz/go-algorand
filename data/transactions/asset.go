@@ -121,7 +121,7 @@ func getParams(balances Balances, aidx basics.AssetIndex) (params basics.AssetPa
 	return
 }
 
-func (cc AssetConfigTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData, txnCounter uint64) error {
+func (cc AssetConfigTxnFields) Apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData, txnCounter uint64) error {
 	if cc.ConfigAsset == 0 {
 		// Allocating an asset.
 		record, err := balances.Get(header.Sender, false)
@@ -275,7 +275,7 @@ func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amou
 	return balances.Put(rcv)
 }
 
-func (ct AssetTransferTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
+func (ct AssetTransferTxnFields) Apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
 	// Default to sending from the transaction sender's account.
 	source := header.Sender
 	clawback := false
@@ -417,7 +417,7 @@ func (ct AssetTransferTxnFields) apply(header Header, balances Balances, spec Sp
 	return nil
 }
 
-func (cf AssetFreezeTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
+func (cf AssetFreezeTxnFields) Apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
 	// Only the Freeze address can change the freeze value.
 	params, _, err := getParams(balances, cf.FreezeAsset)
 	if err != nil {

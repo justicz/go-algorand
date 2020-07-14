@@ -61,7 +61,7 @@ func (payment PaymentTxnFields) checkSpender(header Header, spec SpecialAddresse
 // than overwriting it.  For example, Transaction.Apply() may
 // have updated ad.SenderRewards, and this function should only
 // add to ad.SenderRewards (if needed), but not overwrite it.
-func (payment PaymentTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
+func (payment PaymentTxnFields) Apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
 	// move tx money
 	if !payment.Amount.IsZero() || payment.Receiver != (basics.Address{}) {
 		err := balances.Move(header.Sender, payment.Receiver, payment.Amount, &ad.SenderRewards, &ad.ReceiverRewards)

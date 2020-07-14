@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -615,7 +616,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, appEval *app
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := txn.Txn.Apply(cow, appEval, spec, cow.txnCounter())
+	applyData, err := applyTransactions(txn.Txn, cow, appEval, spec, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txid, err)
 	}
@@ -683,6 +684,72 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, appEval *app
 	cow.addTx(txn.Txn, txid)
 
 	return nil
+}
+
+// Apply changes the balances according to this transaction.
+func applyTransactions(tx transactions.Transaction, balances transactions.Balances, steva transactions.StateEvaluator, spec transactions.SpecialAddresses, ctr uint64) (ad transactions.ApplyData, err error) {
+	params := balances.ConsensusParams()
+
+	// move fee to pool
+	err = balances.Move(tx.Sender, spec.FeeSink, tx.Fee, &ad.SenderRewards, nil)
+	if err != nil {
+		return
+	}
+
+	// rekeying: update balrecord.AuthAddr to tx.RekeyTo if provided
+	if (tx.RekeyTo != basics.Address{}) {
+		var record basics.BalanceRecord
+		record, err = balances.Get(tx.Sender, false)
+		if err != nil {
+			return
+		}
+
+		// Special case: rekeying to the account's actual address just sets balrecord.AuthAddr to 0
+		// This saves 32 bytes in your balance record if you want to go back to using your original key
+		if tx.RekeyTo == tx.Sender {
+			record.AuthAddr = basics.Address{}
+		} else {
+			record.AuthAddr = tx.RekeyTo
+		}
+
+		err = balances.Put(record)
+		if err != nil {
+			return
+		}
+	}
+
+	switch tx.Type {
+	case protocol.PaymentTx:
+		err = tx.PaymentTxnFields.Apply(tx.Header, balances, spec, &ad)
+
+	case protocol.KeyRegistrationTx:
+		err = tx.KeyregTxnFields.Apply(tx.Header, balances, spec, &ad)
+
+	case protocol.AssetConfigTx:
+		err = tx.AssetConfigTxnFields.Apply(tx.Header, balances, spec, &ad, ctr)
+
+	case protocol.AssetTransferTx:
+		err = tx.AssetTransferTxnFields.Apply(tx.Header, balances, spec, &ad)
+
+	case protocol.AssetFreezeTx:
+		err = tx.AssetFreezeTxnFields.Apply(tx.Header, balances, spec, &ad)
+
+	case protocol.ApplicationCallTx:
+		err = apply.ApplicationCall(&tx.ApplicationCallTxnFields, tx.Header, balances, spec, &ad, ctr, steva)
+
+	default:
+		err = fmt.Errorf("Unknown transaction type %v", tx.Type)
+	}
+
+	// If the protocol does not support rewards in ApplyData,
+	// clear them out.
+	if !params.RewardsInApplyData {
+		ad.SenderRewards = basics.MicroAlgos{}
+		ad.ReceiverRewards = basics.MicroAlgos{}
+		ad.CloseRewards = basics.MicroAlgos{}
+	}
+
+	return
 }
 
 // Call "endOfBlock" after all the block's rewards and transactions are processed.
