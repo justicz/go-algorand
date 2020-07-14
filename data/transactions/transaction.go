@@ -63,6 +63,10 @@ type Balances interface {
 	// GetCreator gets the address of the account that created a given creatable
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 
+	OptInApp(addr basics.Address, aidx basics.AppIndex) error
+	CloseOutApp(addr basics.Address, aidx basics.AppIndex) error
+	StatefulEval(aidx basics.AppIndex
+
 	// Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
 	// TODO: Does this need to be part of the balances interface, or can it just be implemented here as a function that calls Put and Get?
 	Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards *basics.MicroAlgos, dstRewards *basics.MicroAlgos) error
