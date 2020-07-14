@@ -126,7 +126,8 @@ func TestPaymentApply(t *testing.T) {
 			Amount:   basics.MicroAlgos{Raw: uint64(50)},
 		},
 	}
-	_, err := tx.Apply(mockBalV0, nil, SpecialAddresses{FeeSink: feeSink}, 0)
+	ad := ApplyData{}
+	err := tx.PaymentTxnFields.Apply(tx.Header, mockBalV0, SpecialAddresses{FeeSink: feeSink}, &ad)
 	require.NoError(t, err)
 }
 
