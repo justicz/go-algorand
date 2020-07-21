@@ -111,6 +111,9 @@ func (al *logicLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (boo
 }
 
 func (al *logicLedger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string) (basics.TealValue, bool, error) {
+	if appIdx == basics.AppIndex(0) {
+		appIdx = al.aidx
+	}
 	return al.cow.GetStorage(addr, appIdx, false, key)
 }
 
@@ -135,6 +138,9 @@ func (al *logicLedger) fetchAppCreator(appIdx basics.AppIndex) (basics.Address, 
 }
 
 func (al *logicLedger) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue, bool, error) {
+	if appIdx == basics.AppIndex(0) {
+		appIdx = al.aidx
+	}
 	addr, err := al.fetchAppCreator(appIdx)
 	if err != nil {
 		return basics.TealValue{}, false, err

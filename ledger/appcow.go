@@ -85,6 +85,20 @@ func (cb *roundCowState) Allocated(addr basics.Address, aidx basics.AppIndex, gl
 	return cb.lookupParent.Allocated(addr, aidx, global)
 }
 
+func errNoStorage(addr basics.Address, aidx basics.AppIndex, global bool) error {
+	if global {
+		return fmt.Errorf("app %d does not exist", aidx)
+	}
+	return fmt.Errorf("%v has not opted in to app %d", addr, aidx)
+}
+
+func errAlreadyStorage(addr basics.Address, aidx basics.AppIndex, global bool) error {
+	if global {
+		return fmt.Errorf("app %d already exists", aidx)
+	}
+	return fmt.Errorf("%v has already opted in to app %d", addr, aidx)
+}
+
 func (cb *roundCowState) Allocate(addr basics.Address, aidx basics.AppIndex, global bool) error {
 	// Check that account is not already opted in
 	allocated, err := cb.Allocated(addr, aidx, global)
@@ -92,7 +106,7 @@ func (cb *roundCowState) Allocate(addr basics.Address, aidx basics.AppIndex, glo
 		return err
 	}
 	if allocated {
-		err = fmt.Errorf("cannot allocate storage, %v already allocated storage for app %d", addr, aidx)
+		err = fmt.Errorf("cannot allocate storage, %v", errAlreadyStorage(addr, aidx, global))
 		return err
 	}
 
@@ -112,7 +126,7 @@ func (cb *roundCowState) Deallocate(addr basics.Address, aidx basics.AppIndex, g
 		return err
 	}
 	if !allocated {
-		err = fmt.Errorf("cannot deallocate storage, %v has not allocated storage for app %d", addr, aidx)
+		err = fmt.Errorf("cannot deallocate storage, %v", errNoStorage(addr, aidx, global))
 		return err
 	}
 
@@ -134,7 +148,7 @@ func (cb *roundCowState) GetStorage(addr basics.Address, aidx basics.AppIndex, g
 		return basics.TealValue{}, false, err
 	}
 	if !allocated {
-		err = fmt.Errorf("cannot fetch key, %v has not allocated storage for app %d", addr, aidx)
+		err = fmt.Errorf("cannot fetch key, %v", errNoStorage(addr, aidx, global))
 		return basics.TealValue{}, false, err
 	}
 
@@ -148,16 +162,20 @@ func (cb *roundCowState) GetStorage(addr basics.Address, aidx basics.AppIndex, g
 			val, ok := delta.ToTealValue()
 			return val, ok, nil
 		}
+
+		// If this storage delta is noAction, then check our parent.
+		// Otherwise, the key does not exist.
+		if lsd.action == noAction {
+			// Check our parent
+			return cb.lookupParent.GetStorage(addr, aidx, global, key)
+		}
+
+		return basics.TealValue{}, false, nil
 	}
 
-	// If this storage delta is noAction, then check our parent.
-	// Otherwise, the key does not exist.
-	if lsd.action == noAction {
-		// Check our parent
-		return cb.lookupParent.GetStorage(addr, aidx, global, key)
-	}
-
-	return basics.TealValue{}, false, nil
+	// At this point, we know we're allocated, and we don't have a delta,
+	// so we should check our parent.
+	return cb.lookupParent.GetStorage(addr, aidx, global, key)
 }
 
 func (cb *roundCowState) SetStorage(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue) error {
@@ -167,7 +185,7 @@ func (cb *roundCowState) SetStorage(addr basics.Address, aidx basics.AppIndex, g
 		return err
 	}
 	if !allocated {
-		err = fmt.Errorf("cannot set key, %v has not allocated storage for app %d", addr, aidx)
+		err = fmt.Errorf("cannot set key, %v", errNoStorage(addr, aidx, global))
 		return err
 	}
 
@@ -206,7 +224,7 @@ func (cb *roundCowState) DelStorage(addr basics.Address, aidx basics.AppIndex, g
 		return err
 	}
 	if !allocated {
-		err = fmt.Errorf("cannot del key, %v not opted in to app %d", addr, aidx)
+		err = fmt.Errorf("cannot del key, %v", errNoStorage(addr, aidx, global))
 		return err
 	}
 
