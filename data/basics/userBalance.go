@@ -208,8 +208,7 @@ type AccountData struct {
 type AppLocalState struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Schema   StateSchema  `codec:"hsch"`
-	KeyValue TealKeyValue `codec:"tkv"`
+	Schema StateSchema `codec:"hsch"`
 }
 
 // AppParams stores the global information associated with an application
@@ -247,7 +246,6 @@ func (ap *AppParams) Clone() (res AppParams) {
 // affecting the original
 func (al *AppLocalState) Clone() (res AppLocalState) {
 	res = *al
-	res.KeyValue = al.KeyValue.Clone()
 	return
 }
 

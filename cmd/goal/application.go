@@ -972,12 +972,13 @@ var readStateAppCmd = &cobra.Command{
 			}
 
 			// Get application local state
-			local, ok := ad.AppLocalStates[basics.AppIndex(appIdx)]
+			_, ok := ad.AppLocalStates[basics.AppIndex(appIdx)]
 			if !ok {
 				reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
 			}
 
-			kv := local.KeyValue
+			// TODO app refactor, fix
+			kv := basics.TealKeyValue{}//local.KeyValue
 			if guessFormat {
 				kv = heuristicFormat(kv)
 			}

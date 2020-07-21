@@ -79,6 +79,31 @@ func (x *roundCowBase) txnCounter() uint64 {
 	return x.txnCount
 }
 
+func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
+	return basics.StateSchema{}, nil
+}
+
+func (x *roundCowBase) Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
+	acct, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	if err != nil {
+		return false, err
+	}
+
+	// For global, check if app params exist
+	if global {
+		_, ok := acct.AppParams[aidx]
+		return ok, nil
+	}
+
+	// Otherwise, check app local states
+	_, ok := acct.AppLocalStates[aidx]
+	return ok, nil
+}
+
+func (x *roundCowBase) GetStorage(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+	return basics.TealValue{}, false, nil
+}
+
 // wrappers for roundCowState to satisfy the (current) transactions.Balances interface
 func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
 	acctdata, err := cs.lookup(addr)
@@ -460,11 +485,11 @@ func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithA
 	return eval.transactionGroup(txads)
 }
 
-// prepareAppEvaluators creates appTealEvaluators for each ApplicationCall
+// prepareEvalParams creates a logic.EvalParams for each ApplicationCall
 // transaction in the group
-func (eval *BlockEvaluator) prepareAppEvaluators(txgroup []transactions.SignedTxnWithAD) (res []*appTealEvaluator) {
+func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWithAD) (res []*logic.EvalParams) {
 	var groupNoAD []transactions.SignedTxn
-	res = make([]*appTealEvaluator, len(txgroup))
+	res = make([]*logic.EvalParams, len(txgroup))
 	for i, txn := range txgroup {
 		// Ignore any non-ApplicationCall transactions
 		if txn.SignedTxn.Txn.Type != protocol.ApplicationCallTx {
@@ -479,22 +504,12 @@ func (eval *BlockEvaluator) prepareAppEvaluators(txgroup []transactions.SignedTx
 			}
 		}
 
-		// Construct an appTealEvaluator (implements
-		// transactions.StateEvaluator) for use in ApplicationCall transactions.
-		steva := appTealEvaluator{
-			evalParams: logic.EvalParams{
-				Txn:        &groupNoAD[i],
-				Proto:      &eval.proto,
-				TxnGroup:   groupNoAD,
-				GroupIndex: i,
-			},
-			AppTealGlobals: AppTealGlobals{
-				CurrentRound:    eval.prevHeader.Round + 1,
-				LatestTimestamp: eval.prevHeader.TimeStamp,
-			},
+		res[i] = &logic.EvalParams{
+			Txn:        &groupNoAD[i],
+			Proto:      &eval.proto,
+			TxnGroup:   groupNoAD,
+			GroupIndex: i,
 		}
-
-		res[i] = &steva
 	}
 	return
 }
@@ -518,15 +533,15 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 	cow := eval.state.child()
 
-	// Prepare TEAL contexts for any ApplicationCall transactions in the group
-	appEvaluators := eval.prepareAppEvaluators(txgroup)
+	// Prepare eval params for any ApplicationCall transactions in the group
+	evalParams := eval.prepareEvalParams(txgroup)
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		err := eval.transaction(txad.SignedTxn, appEvaluators[gi], txad.ApplyData, cow, &txib)
+		err := eval.transaction(txad.SignedTxn, evalParams[gi], txad.ApplyData, cow, &txib)
 		if err != nil {
 			return err
 		}
@@ -574,7 +589,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, appEval *appTealEvaluator, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *logic.EvalParams, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
 	// Only compute the TxID once
@@ -616,7 +631,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, appEval *app
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := applyTransactions(txn.Txn, cow, appEval, spec, cow.txnCounter())
+	applyData, err := applyTransactions(txn.Txn, cow, evalParams, spec, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txid, err)
 	}
@@ -687,7 +702,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, appEval *app
 }
 
 // Apply changes the balances according to this transaction.
-func applyTransactions(tx transactions.Transaction, balances transactions.Balances, steva transactions.StateEvaluator, spec transactions.SpecialAddresses, ctr uint64) (ad transactions.ApplyData, err error) {
+func applyTransactions(tx transactions.Transaction, balances apply.Balances, evalParams *logic.EvalParams, spec transactions.SpecialAddresses, ctr uint64) (ad transactions.ApplyData, err error) {
 	params := balances.ConsensusParams()
 
 	// move fee to pool
@@ -735,7 +750,7 @@ func applyTransactions(tx transactions.Transaction, balances transactions.Balanc
 		err = tx.AssetFreezeTxnFields.Apply(tx.Header, balances, spec, &ad)
 
 	case protocol.ApplicationCallTx:
-		err = apply.ApplicationCall(&tx.ApplicationCallTxnFields, tx.Header, balances, spec, &ad, ctr, steva)
+		err = apply.ApplicationCall(&tx.ApplicationCallTxnFields, tx.Header, balances, &ad, evalParams, ctr)
 
 	default:
 		err = fmt.Errorf("Unknown transaction type %v", tx.Type)

@@ -5,13 +5,25 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
 // Allocate the map of AppParams if it is nil, and return a copy. We do *not*
 // call clone on each AppParams -- callers must do that for any values where
-// they intend to modify a contained reference type e.g. the GlobalState.
+// they intend to modify a contained reference type.
 func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]basics.AppParams {
 	res := make(map[basics.AppIndex]basics.AppParams, len(m))
+	for k, v := range m {
+		res[k] = v
+	}
+	return res
+}
+
+// Allocate the map of LocalStates if it is nil, and return a copy. We do *not*
+// call clone on each AppLocalState -- callers must do that for any values
+// where they intend to modify a contained reference type.
+func cloneAppLocalStates(m map[basics.AppIndex]basics.AppLocalState) map[basics.AppIndex]basics.AppLocalState {
+	res := make(map[basics.AppIndex]basics.AppLocalState, len(m))
 	for k, v := range m {
 		res[k] = v
 	}
@@ -21,7 +33,7 @@ func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]
 // getAppParams fetches the creator address and AppParams for the app index,
 // if they exist. It does *not* clone the AppParams, so the returned params
 // must not be modified directly.
-func getAppParams(balances transactions.Balances, aidx basics.AppIndex) (params basics.AppParams, creator basics.Address, exists bool, err error) {
+func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppParams, creator basics.Address, exists bool, err error) {
 	creator, exists, err = balances.GetCreator(basics.CreatableIndex(aidx), basics.AppCreatable)
 	if err != nil {
 		return
@@ -48,31 +60,9 @@ func getAppParams(balances transactions.Balances, aidx basics.AppIndex) (params 
 	return
 }
 
-func checkPrograms(ac *transactions.ApplicationCallTxnFields, steva transactions.StateEvaluator, maxCost int) error {
-	cost, err := steva.Check(ac.ApprovalProgram)
-	if err != nil {
-		return fmt.Errorf("check failed on ApprovalProgram: %v", err)
-	}
-
-	if cost > maxCost {
-		return fmt.Errorf("ApprovalProgram too resource intensive. Cost is %d, max %d", cost, maxCost)
-	}
-
-	cost, err = steva.Check(ac.ClearStateProgram)
-	if err != nil {
-		return fmt.Errorf("check failed on ClearStateProgram: %v", err)
-	}
-
-	if cost > maxCost {
-		return fmt.Errorf("ClearStateProgram too resource intensive. Cost is %d, max %d", cost, maxCost)
-	}
-
-	return nil
-}
-
-// createApplication writes a new AppParams entry and returns application ID
-func createApplication(ac *transactions.ApplicationCallTxnFields, balances transactions.Balances, creator basics.Address, txnCounter uint64) (appIdx basics.AppIndex, err error) {
-
+// createApplication writes a new AppParams entry, allocates global storage,
+// and returns the generated application ID
+func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balances, creator basics.Address, txnCounter uint64) (appIdx basics.AppIndex, err error) {
 	// Fetch the creator's (sender's) balance record
 	record, err := balances.Get(creator, false)
 	if err != nil {
@@ -114,8 +104,14 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances trans
 		Index:   basics.CreatableIndex(appIdx),
 	}
 
-	// Write back to the creator's balance record and continue
+	// Write back to the creator's balance record
 	err = balances.PutWithCreatable(record, created, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	// Allocate global storage
+	err = balances.Allocate(creator, appIdx, true)
 	if err != nil {
 		return 0, err
 	}
@@ -123,7 +119,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances trans
 	return
 }
 
-func deleteApplication(balances Balances, creator basics.Address) error {
+func deleteApplication(balances Balances, creator basics.Address, appIdx basics.AppIndex) error {
 	// Deleting the application. Fetch the creator's balance record
 	record, err := balances.Get(creator, false)
 	if err != nil {
@@ -147,12 +143,21 @@ func deleteApplication(balances Balances, creator basics.Address) error {
 		Type:    basics.AppCreatable,
 		Index:   basics.CreatableIndex(appIdx),
 	}
+	err = balances.PutWithCreatable(record, nil, deleted)
+	if err != nil {
+		return err
+	}
 
-	// Write back to cow
-	return balances.PutWithCreatable(record, nil, deleted)
+	// Deallocate global storage
+	err = balances.Deallocate(creator, appIdx, true)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func updateApplication(balances Balances, creator basics.Address) error {
+func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balances, creator basics.Address, appIdx basics.AppIndex) error {
 	// Updating the application. Fetch the creator's balance record
 	record, err := balances.Get(creator, false)
 	if err != nil {
@@ -169,7 +174,90 @@ func updateApplication(balances Balances, creator basics.Address) error {
 	return balances.Put(record)
 }
 
-func ApplicationCall(ac *transactions.ApplicationCallTxnFields, header transactions.Header, balances transactions.Balances, ad *transactions.ApplyData, evalParams logic.EvalParams, txnCounter uint64) (err error) {
+func optInApplication(balances Balances, sender basics.Address, appIdx basics.AppIndex, params basics.AppParams) error {
+	record, err := balances.Get(sender, false)
+	if err != nil {
+		return err
+	}
+
+	// If the user has already opted in, fail
+	_, ok := record.AppLocalStates[appIdx]
+	if ok {
+		return fmt.Errorf("account %s has already opted in to app %d", sender.String(), appIdx)
+	}
+
+	// Make sure the user isn't already at the app opt-in max
+	maxAppsOptedIn := balances.ConsensusParams().MaxAppsOptedIn
+	if len(record.AppLocalStates) >= maxAppsOptedIn {
+		return fmt.Errorf("cannot opt in app %d for %s: max opted-in apps per acct is %d", appIdx, sender.String(), maxAppsOptedIn)
+	}
+
+	// Write an AppLocalState, opting in the user
+	record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
+	record.AppLocalStates[appIdx] = basics.AppLocalState{
+		Schema: params.LocalStateSchema,
+	}
+
+	// Update the TotalAppSchema used for MinBalance calculation,
+	// since the sender must now store LocalState
+	totalSchema := record.TotalAppSchema
+	totalSchema = totalSchema.AddSchema(params.LocalStateSchema)
+	record.TotalAppSchema = totalSchema
+
+	// Write opted-in user back to cow
+	err = balances.Put(record)
+	if err != nil {
+		return err
+	}
+
+	// Allocate local storage
+	err = balances.Allocate(sender, appIdx, false)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func closeOutApplication(balances Balances, sender basics.Address, appIdx basics.AppIndex) error {
+	// Closing out of the application. Fetch the sender's balance record
+	record, err := balances.Get(sender, false)
+	if err != nil {
+		return err
+	}
+
+	// If they haven't opted in, that's an error
+	localState, ok := record.AppLocalStates[appIdx]
+	if !ok {
+		return fmt.Errorf("account %s is not opted in to app %d", sender, appIdx)
+	}
+
+	// Update the TotalAppSchema used for MinBalance calculation,
+	// since the sender no longer has to store LocalState
+	totalSchema := record.TotalAppSchema
+	totalSchema = totalSchema.SubSchema(localState.Schema)
+	record.TotalAppSchema = totalSchema
+
+	// Delete the local state
+	record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
+	delete(record.AppLocalStates, appIdx)
+
+	// Write closed-out user back to cow
+	err = balances.Put(record)
+	if err != nil {
+		return err
+	}
+
+	// Deallocate local storage
+	err = balances.Deallocate(sender, appIdx, false)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func ApplicationCall(ac *transactions.ApplicationCallTxnFields, header transactions.Header, balances Balances, ad *transactions.ApplyData, evalParams *logic.EvalParams, txnCounter uint64) (err error) {
 	defer func() {
 		// If we are returning a non-nil error, then don't return a
 		// non-empty EvalDelta. Not required for correctness.
@@ -184,12 +272,18 @@ func ApplicationCall(ac *transactions.ApplicationCallTxnFields, header transacti
 		return
 	}
 
+	// Ensure we are always passed non-nil EvalParams
+	if evalParams == nil {
+		err = fmt.Errorf("ApplicationCall cannot have nil EvalParams")
+		return
+	}
+
 	// Keep track of the application ID we're working on
 	appIdx := ac.ApplicationID
 
 	// Specifying an application ID of 0 indicates application creation
 	if ac.ApplicationID == 0 {
-		appIdx, err = ac.createApplication(balances, header.Sender, txnCounter)
+		appIdx, err = createApplication(ac, balances, header.Sender, txnCounter)
 		if err != nil {
 			return
 		}
@@ -203,10 +297,11 @@ func ApplicationCall(ac *transactions.ApplicationCallTxnFields, header transacti
 
 	// Ensure that the only operation we can do is ClearState if the application
 	// does not exist
-	if !exists && ac.OnCompletion != ClearStateOC {
+	if !exists && ac.OnCompletion != transactions.ClearStateOC {
 		return fmt.Errorf("only clearing out is supported for applications that do not exist")
 	}
 
+	/*
 	// If this txn is going to set new programs (either for creation or
 	// update), check that the programs are valid and not too expensive
 	if ac.ApplicationID == 0 || ac.OnCompletion == UpdateApplicationOC {
@@ -216,34 +311,49 @@ func ApplicationCall(ac *transactions.ApplicationCallTxnFields, header transacti
 			return err
 		}
 	}
+	*/
 
 	// Clear out our LocalState. In this case, we don't execute the
 	// ApprovalProgram, since clearing out is always allowed. We only
 	// execute the ClearStateProgram, whose failures are ignored.
-	if ac.OnCompletion == ClearStateOC {
-		evalDelta, err := balances.StatefulEval(evalParams, appIdx, params.ClearStateProgram, false /* err on failure */)
+	if ac.OnCompletion == transactions.ClearStateOC {
+		// Ensure that the user is already opted in
+		record, err := balances.Get(header.Sender, false)
+		if err != nil {
+			return err
+		}
+		_, ok := record.AppLocalStates[appIdx]
+		if !ok {
+			return fmt.Errorf("cannot clear state: %v is not currently opted in to app %d", header.Sender, appIdx)
+		}
+
+		pass, err := balances.StatefulEval(*evalParams, appIdx, params.ClearStateProgram)
 		if err != nil {
 			return err
 		}
 
 		// Fill in applyData, so that consumers don't have to implement a
 		// stateful TEAL interpreter to apply state changes
-		ad.EvalDelta = evalDelta
-		return balances.CloseOutApp(header.Sender, appIdx)
+		if pass {
+			// We will have applied any changes if and only if we passed
+			// ad.EvalDelta = evalDelta
+		}
+
+		return closeOutApplication(balances, header.Sender, appIdx)
 	}
 
 	// If this is an OptIn transaction, ensure that the sender has
 	// LocalState allocated prior to TEAL execution, so that it may be
 	// initialized in the same transaction.
-	if ac.OnCompletion == OptInOC {
-		err = balances.OptInApp(header.Sender, appIdx)
+	if ac.OnCompletion == transactions.OptInOC {
+		err = optInApplication(balances, header.Sender, appIdx, params)
 		if err != nil {
 			return err
 		}
 	}
 
 	// Execute the Approval program
-	approved, evalDelta, err := balances.StatefulEval(evalParams, appIdx, params.ApprovalProgram, true /* err on failure */)
+	approved, err := balances.StatefulEval(*evalParams, appIdx, params.ApprovalProgram)
 	if err != nil {
 		return err
 	}
@@ -254,29 +364,29 @@ func ApplicationCall(ac *transactions.ApplicationCallTxnFields, header transacti
 
 	// Fill in applyData, so that consumers don't have to implement a
 	// stateful TEAL interpreter to apply state changes
-	ad.EvalDelta = evalDelta
+	// ad.EvalDelta = evalDelta
 
 	switch ac.OnCompletion {
-	case NoOpOC:
+	case transactions.NoOpOC:
 		// Nothing to do
 
-	case OptInOC:
+	case transactions.OptInOC:
 		// Handled above
 
-	case CloseOutOC:
-		err = balances.CloseOutApp(header.Sender, appIdx)
+	case transactions.CloseOutOC:
+		err = closeOutApplication(balances, header.Sender, appIdx)
 		if err != nil {
 			return err
 		}
 
-	case DeleteApplicationOC:
-		err = deleteApplication(&ac, balances, creator)
+	case transactions.DeleteApplicationOC:
+		err = deleteApplication(balances, creator, appIdx)
 		if err != nil {
 			return err
 		}
 
-	case UpdateApplicationOC:
-		err = updateApplication(&ac, balances, creator)
+	case transactions.UpdateApplicationOC:
+		err = updateApplication(ac, balances, creator, appIdx)
 		if err != nil {
 			return err
 		}

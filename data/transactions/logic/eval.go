@@ -103,18 +103,19 @@ type LedgerForLogic interface {
 	Balance(addr basics.Address) (basics.MicroAlgos, error)
 	Round() basics.Round
 	LatestTimestamp() int64
+
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetParams, error)
 	ApplicationID() basics.AppIndex
 	OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error)
 
 	GetLocal(addr basics.Address, appIdx basics.AppIndex, key string) (basics.TealValue, bool, error)
-	SetLocal(addr basics.Address, appIdx basics.AppIndex, key string, value basics.TealValue) error
-	DelLocal(addr basics.Address, appIdx basics.AppIndex, key string) error
+	SetLocal(addr basics.Address, key string, value basics.TealValue) error
+	DelLocal(addr basics.Address, key string) error
 
 	GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue, bool, error)
-	SetGlobal(appIdx basics.AppIndex, key string, value basics.TealValue) error
-	DelGlobal(appIdx basics.AppIndex, key string) error
+	SetGlobal(key string, value basics.TealValue) error
+	DelGlobal(key string) error
 }
 
 // EvalParams contains data that comes into condition evaluation.
@@ -266,7 +267,7 @@ var errLogicSignNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
 // EvalStateful executes stateful TEAL program
-func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.EvalDelta, err error) {
+func EvalStateful(program []byte, params EvalParams) (pass bool, err error) {
 	var cx evalContext
 	cx.EvalParams = params
 	cx.runModeFlags = runModeApplication
@@ -274,7 +275,7 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.Ev
 	// Evaluate the program
 	pass, err = eval(program, &cx)
 
-	return pass, cx.appEvalDelta, err
+	return pass, err
 }
 
 // Eval checks to see if a transaction passes logic
@@ -1723,7 +1724,7 @@ func (cx *evalContext) appWriteLocalKey(accountIdx uint64, key string, tv basics
 	if err != nil {
 		return err
 	}
-	return cx.Ledger.SetLocal(addr, cx.Ledger.ApplicationID(), key, tv)
+	return cx.Ledger.SetLocal(addr, key, tv)
 }
 
 // appDeleteLocalKey deletes a value from the key/value cow
@@ -1733,23 +1734,29 @@ func (cx *evalContext) appDeleteLocalKey(accountIdx uint64, key string) error {
 	if err != nil {
 		return err
 	}
-	return cx.Ledger.DelLocal(addr, cx.Ledger.ApplicationID(), key)
+	return cx.Ledger.DelLocal(addr, key)
 }
 
-func (cx *evalContext) appReadGlobalKey(foreignAppIdx uint64, key string) (basics.TealValue, bool, error) {
-	appIdx, err := cx.Txn.Txn.ForeignAppByIndex(foreignAppIdx, cx.Ledger.ApplicationID())
-	if err != nil {
+func (cx *evalContext) appReadGlobalKey(foreignAppsIndex uint64, key string) (basics.TealValue, bool, error) {
+	if foreignAppsIndex > uint64(len(cx.Txn.Txn.ForeignApps)) {
+		err := fmt.Errorf("invalid ForeignApps index %d", foreignAppsIndex)
 		return basics.TealValue{}, false, err
 	}
+
+	appIdx := cx.Ledger.ApplicationID()
+	if foreignAppsIndex != 0 {
+		appIdx = cx.Txn.Txn.ForeignApps[foreignAppsIndex-1]
+	}
+
 	return cx.Ledger.GetGlobal(appIdx, key)
 }
 
 func (cx *evalContext) appWriteGlobalKey(key string, tv basics.TealValue) error {
-	return cx.Ledger.SetGlobal(cx.Ledger.ApplicationID(), key, tv)
+	return cx.Ledger.SetGlobal(key, tv)
 }
 
 func (cx *evalContext) appDeleteGlobalKey(key string) error {
-	return cx.Ledger.DelGlobal(cx.Ledger.ApplicationID(), key)
+	return cx.Ledger.DelGlobal(key)
 }
 
 func opAppGetLocalState(cx *evalContext) {

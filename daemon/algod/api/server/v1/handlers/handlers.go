@@ -240,7 +240,8 @@ func modelAppParams(creator basics.Address, params basics.AppParams) v1.AppParam
 func modelAppLocalState(s basics.AppLocalState) v1.AppLocalState {
 	return v1.AppLocalState{
 		Schema:   modelSchema(s.Schema),
-		KeyValue: modelTealKeyValue(s.KeyValue),
+		// TODO app refactor, fix
+//		KeyValue: modelTealKeyValue(s.KeyValue),
 	}
 }
 

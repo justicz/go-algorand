@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger"
+//	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -358,7 +358,7 @@ func (dl *dryrunLedger) ConsensusParams() config.ConsensusParams {
 }
 
 func makeAppLedger(dl *dryrunLedger, txn *transactions.Transaction, appIdx basics.AppIndex) (l logic.LedgerForLogic, err error) {
-	globals := ledger.AppTealGlobals{
+/*	globals := ledger.AppTealGlobals{
 		CurrentRound:    basics.Round(dl.dr.Round),
 		LatestTimestamp: dl.dr.LatestTimestamp,
 	}
@@ -366,6 +366,9 @@ func makeAppLedger(dl *dryrunLedger, txn *transactions.Transaction, appIdx basic
 	globalSchema := basics.StateSchema{NumUint: 64, NumByteSlice: 64}
 	schemas := basics.StateSchemas{LocalStateSchema: localSchema, GlobalStateSchema: globalSchema}
 	return ledger.MakeDebugAppLedger(dl, appIdx, schemas, globals)
+*/
+	// TODO app refactor, fix
+	return nil, nil
 }
 
 // unit-testable core of dryrun handler
@@ -453,7 +456,10 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 					program = app.ApprovalProgram
 					messages[0] = "ApprovalProgram"
 				}
-				pass, delta, err := logic.EvalStateful(program, ep)
+
+				// TODO app refactor, fix
+				pass, err := logic.EvalStateful(program, ep)
+				delta := basics.EvalDelta{}
 				result.Disassembly = debug.lines
 				result.AppCallTrace = &debug.history
 				result.GlobalDelta = StateDeltaToStateDelta(delta.GlobalDelta)

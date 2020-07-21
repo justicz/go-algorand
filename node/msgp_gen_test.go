@@ -7,7 +7,6 @@ package node
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/msgp/msgp"
 )
 

@@ -37,6 +37,9 @@ type roundCowParent interface {
 	isDup(basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
+	getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
+	Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
+	GetStorage(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error)
 }
 
 type roundCowState struct {
@@ -44,6 +47,52 @@ type roundCowState struct {
 	commitParent *roundCowState
 	proto        config.ConsensusParams
 	mods         StateDelta
+}
+
+type addrApp struct {
+	addr   basics.Address
+	aidx   basics.AppIndex
+	global bool
+}
+
+type storageAction uint64
+
+const (
+	noAction      storageAction = 0
+	allocAction   storageAction = 1
+	deallocAction storageAction = 2
+)
+
+type storageDelta struct {
+	action  storageAction
+	kvCow   basics.StateDelta
+	counts  *basics.StateSchema
+}
+
+func (lsd *storageDelta) merge(osd *storageDelta) {
+	if osd.action != noAction {
+		// If child state allocated or deallocated, then its deltas
+		// completely overwrite those of the parent.
+		lsd.action = osd.action
+		lsd.kvCow = osd.kvCow
+		lsd.counts = osd.counts
+	} else {
+		// Otherwise, the child's deltas get merged with those of the
+		// parent, and we keep whatever the parent's state was.
+		for key, delta := range osd.kvCow {
+			lsd.kvCow[key] = delta
+		}
+
+		// counts can just get overwritten because they are absolute
+		lsd.counts = osd.counts
+	}
+
+	// sanity check
+	if lsd.action == deallocAction {
+		if len(lsd.kvCow) > 0 {
+			panic("dealloc state delta, but nonzero kv change")
+		}
+	}
 }
 
 // StateDelta describes the delta between a given round to the previous round
@@ -62,6 +111,9 @@ type StateDelta struct {
 
 	// new block header; read-only
 	hdr *bookkeeping.BlockHeader
+
+	// storage deltas
+	sdeltas map[addrApp]*storageDelta
 }
 
 func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader) *roundCowState {
@@ -74,6 +126,7 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader) *roundCowS
 			Txids:      make(map[transactions.Txid]basics.Round),
 			txleases:   make(map[txlease]basics.Round),
 			creatables: make(map[basics.CreatableIndex]modifiedCreatable),
+			sdeltas:   make(map[addrApp]*storageDelta),
 			hdr:        &hdr,
 		},
 	}
@@ -163,6 +216,7 @@ func (cb *roundCowState) child() *roundCowState {
 			Txids:      make(map[transactions.Txid]basics.Round),
 			txleases:   make(map[txlease]basics.Round),
 			creatables: make(map[basics.CreatableIndex]modifiedCreatable),
+			sdeltas:    make(map[addrApp]*storageDelta),
 			hdr:        cb.mods.hdr,
 		},
 	}
@@ -190,9 +244,19 @@ func (cb *roundCowState) commitToParent() {
 	for cidx, delta := range cb.mods.creatables {
 		cb.commitParent.mods.creatables[cidx] = delta
 	}
+	for aapp, nsd := range cb.mods.sdeltas {
+		lsd, ok := cb.commitParent.mods.sdeltas[aapp]
+		if ok {
+			lsd.merge(nsd)
+		} else {
+			cb.commitParent.mods.sdeltas[aapp] = nsd
+		}
+	}
 }
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {
+	// TODO app refactor modify this so that it returns accounts w/
+	// modified local state as well?
 	res := make([]basics.Address, len(cb.mods.accts))
 	i := 0
 	for addr := range cb.mods.accts {

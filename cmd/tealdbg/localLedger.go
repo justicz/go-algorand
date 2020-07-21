@@ -25,7 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger"
+	//"github.com/algorand/go-algorand/ledger"
 )
 
 type balancesAdapter struct {
@@ -53,7 +53,7 @@ func makeAppLedger(
 	apps := []basics.AppIndex{appIdx}
 	apps = append(apps, txn.Txn.ForeignApps...)
 
-	ba := &balancesAdapter{
+	_ = &balancesAdapter{
 		balances:   balances,
 		txnGroup:   txnGroup,
 		groupIndex: groupIndex,
@@ -74,12 +74,13 @@ func makeAppLedger(
 				states.global[aid] = params.GlobalState
 				appsExist[aid] = true
 			}
-			if local, ok := ad.AppLocalStates[aid]; ok {
+			if _, ok := ad.AppLocalStates[aid]; ok {
 				ls, ok := states.locals[addr]
 				if !ok {
 					ls = make(map[basics.AppIndex]basics.TealKeyValue)
 				}
-				ls[aid] = local.KeyValue
+				// TODO(app refactor) fix
+				// ls[aid] = local.KeyValue
 				states.locals[addr] = ls
 			}
 		}
@@ -125,9 +126,10 @@ func makeAppLedger(
 		}
 	}
 
-	appGlobals := ledger.AppTealGlobals{CurrentRound: basics.Round(round), LatestTimestamp: latestTimestamp}
-	ledger, err := ledger.MakeDebugAppLedger(ba, appIdx, states.schemas, appGlobals)
-	return ledger, states, err
+	// TODO app refactor, fix
+//	appGlobals := ledger.AppTealGlobals{CurrentRound: basics.Round(round), LatestTimestamp: latestTimestamp}
+//	ledger, err := ledger.MakeDebugAppLedger(ba, appIdx, states.schemas, appGlobals)
+	return nil, states, nil //err
 }
 
 func makeSchemas() basics.StateSchemas {

@@ -1392,68 +1392,40 @@ func (z AppIndex) MsgIsZero() bool {
 func (z *AppLocalState) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0003Len := uint32(2)
-	var zb0003Mask uint8 /* 3 bits */
+	zb0001Len := uint32(1)
+	var zb0001Mask uint8 /* 2 bits */
 	if ((*z).Schema.NumUint == 0) && ((*z).Schema.NumByteSlice == 0) {
-		zb0003Len--
-		zb0003Mask |= 0x2
+		zb0001Len--
+		zb0001Mask |= 0x2
 	}
-	if len((*z).KeyValue) == 0 {
-		zb0003Len--
-		zb0003Mask |= 0x4
-	}
-	// variable map header, size zb0003Len
-	o = append(o, 0x80|uint8(zb0003Len))
-	if zb0003Len != 0 {
-		if (zb0003Mask & 0x2) == 0 { // if not empty
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "hsch"
 			o = append(o, 0xa4, 0x68, 0x73, 0x63, 0x68)
 			// omitempty: check for empty values
-			zb0004Len := uint32(2)
-			var zb0004Mask uint8 /* 3 bits */
+			zb0002Len := uint32(2)
+			var zb0002Mask uint8 /* 3 bits */
 			if (*z).Schema.NumByteSlice == 0 {
-				zb0004Len--
-				zb0004Mask |= 0x2
+				zb0002Len--
+				zb0002Mask |= 0x2
 			}
 			if (*z).Schema.NumUint == 0 {
-				zb0004Len--
-				zb0004Mask |= 0x4
+				zb0002Len--
+				zb0002Mask |= 0x4
 			}
-			// variable map header, size zb0004Len
-			o = append(o, 0x80|uint8(zb0004Len))
-			if (zb0004Mask & 0x2) == 0 { // if not empty
+			// variable map header, size zb0002Len
+			o = append(o, 0x80|uint8(zb0002Len))
+			if (zb0002Mask & 0x2) == 0 { // if not empty
 				// string "nbs"
 				o = append(o, 0xa3, 0x6e, 0x62, 0x73)
 				o = msgp.AppendUint64(o, (*z).Schema.NumByteSlice)
 			}
-			if (zb0004Mask & 0x4) == 0 { // if not empty
+			if (zb0002Mask & 0x4) == 0 { // if not empty
 				// string "nui"
 				o = append(o, 0xa3, 0x6e, 0x75, 0x69)
 				o = msgp.AppendUint64(o, (*z).Schema.NumUint)
-			}
-		}
-		if (zb0003Mask & 0x4) == 0 { // if not empty
-			// string "tkv"
-			o = append(o, 0xa3, 0x74, 0x6b, 0x76)
-			if (*z).KeyValue == nil {
-				o = msgp.AppendNil(o)
-			} else {
-				o = msgp.AppendMapHeader(o, uint32(len((*z).KeyValue)))
-			}
-			zb0001_keys := make([]string, 0, len((*z).KeyValue))
-			for zb0001 := range (*z).KeyValue {
-				zb0001_keys = append(zb0001_keys, zb0001)
-			}
-			sort.Sort(SortString(zb0001_keys))
-			for _, zb0001 := range zb0001_keys {
-				zb0002 := (*z).KeyValue[zb0001]
-				_ = zb0002
-				o = msgp.AppendString(o, zb0001)
-				o, err = zb0002.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "KeyValue", zb0001)
-					return
-				}
 			}
 		}
 	}
@@ -1469,44 +1441,44 @@ func (_ *AppLocalState) CanMarshalMsg(z interface{}) bool {
 func (z *AppLocalState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0003 int
-	var zb0004 bool
-	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
-			var zb0005 int
-			var zb0006 bool
-			zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
+		if zb0001 > 0 {
+			zb0001--
+			var zb0003 int
+			var zb0004 bool
+			zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if _, ok := err.(msgp.TypeError); ok {
-				zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Schema")
 					return
 				}
-				if zb0005 > 0 {
-					zb0005--
+				if zb0003 > 0 {
+					zb0003--
 					(*z).Schema.NumUint, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "Schema", "struct-from-array", "NumUint")
 						return
 					}
 				}
-				if zb0005 > 0 {
-					zb0005--
+				if zb0003 > 0 {
+					zb0003--
 					(*z).Schema.NumByteSlice, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "Schema", "struct-from-array", "NumByteSlice")
 						return
 					}
 				}
-				if zb0005 > 0 {
-					err = msgp.ErrTooManyArrayFields(zb0005)
+				if zb0003 > 0 {
+					err = msgp.ErrTooManyArrayFields(zb0003)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "Schema", "struct-from-array")
 						return
@@ -1517,11 +1489,11 @@ func (z *AppLocalState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "struct-from-array", "Schema")
 					return
 				}
-				if zb0006 {
+				if zb0004 {
 					(*z).Schema = StateSchema{}
 				}
-				for zb0005 > 0 {
-					zb0005--
+				for zb0003 > 0 {
+					zb0003--
 					field, bts, err = msgp.ReadMapKeyZC(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "Schema")
@@ -1550,44 +1522,8 @@ func (z *AppLocalState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		}
-		if zb0003 > 0 {
-			zb0003--
-			var zb0007 int
-			var zb0008 bool
-			zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "KeyValue")
-				return
-			}
-			if zb0007 > encodedMaxKeyValueEntries {
-				err = msgp.ErrOverflow(uint64(zb0007), uint64(encodedMaxKeyValueEntries))
-				err = msgp.WrapError(err, "struct-from-array", "KeyValue")
-				return
-			}
-			if zb0008 {
-				(*z).KeyValue = nil
-			} else if (*z).KeyValue == nil {
-				(*z).KeyValue = make(TealKeyValue, zb0007)
-			}
-			for zb0007 > 0 {
-				var zb0001 string
-				var zb0002 TealValue
-				zb0007--
-				zb0001, bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "KeyValue")
-					return
-				}
-				bts, err = zb0002.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "KeyValue", zb0001)
-					return
-				}
-				(*z).KeyValue[zb0001] = zb0002
-			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
 				return
@@ -1598,11 +1534,11 @@ func (z *AppLocalState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0004 {
+		if zb0002 {
 			(*z) = AppLocalState{}
 		}
-		for zb0003 > 0 {
-			zb0003--
+		for zb0001 > 0 {
+			zb0001--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
@@ -1610,33 +1546,33 @@ func (z *AppLocalState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "hsch":
-				var zb0009 int
-				var zb0010 bool
-				zb0009, zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0005 int
+				var zb0006 bool
+				zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if _, ok := err.(msgp.TypeError); ok {
-					zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Schema")
 						return
 					}
-					if zb0009 > 0 {
-						zb0009--
+					if zb0005 > 0 {
+						zb0005--
 						(*z).Schema.NumUint, bts, err = msgp.ReadUint64Bytes(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "Schema", "struct-from-array", "NumUint")
 							return
 						}
 					}
-					if zb0009 > 0 {
-						zb0009--
+					if zb0005 > 0 {
+						zb0005--
 						(*z).Schema.NumByteSlice, bts, err = msgp.ReadUint64Bytes(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "Schema", "struct-from-array", "NumByteSlice")
 							return
 						}
 					}
-					if zb0009 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0009)
+					if zb0005 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0005)
 						if err != nil {
 							err = msgp.WrapError(err, "Schema", "struct-from-array")
 							return
@@ -1647,11 +1583,11 @@ func (z *AppLocalState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "Schema")
 						return
 					}
-					if zb0010 {
+					if zb0006 {
 						(*z).Schema = StateSchema{}
 					}
-					for zb0009 > 0 {
-						zb0009--
+					for zb0005 > 0 {
+						zb0005--
 						field, bts, err = msgp.ReadMapKeyZC(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "Schema")
@@ -1679,40 +1615,6 @@ func (z *AppLocalState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						}
 					}
 				}
-			case "tkv":
-				var zb0011 int
-				var zb0012 bool
-				zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "KeyValue")
-					return
-				}
-				if zb0011 > encodedMaxKeyValueEntries {
-					err = msgp.ErrOverflow(uint64(zb0011), uint64(encodedMaxKeyValueEntries))
-					err = msgp.WrapError(err, "KeyValue")
-					return
-				}
-				if zb0012 {
-					(*z).KeyValue = nil
-				} else if (*z).KeyValue == nil {
-					(*z).KeyValue = make(TealKeyValue, zb0011)
-				}
-				for zb0011 > 0 {
-					var zb0001 string
-					var zb0002 TealValue
-					zb0011--
-					zb0001, bts, err = msgp.ReadStringBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "KeyValue")
-						return
-					}
-					bts, err = zb0002.UnmarshalMsg(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "KeyValue", zb0001)
-						return
-					}
-					(*z).KeyValue[zb0001] = zb0002
-				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -1733,20 +1635,13 @@ func (_ *AppLocalState) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *AppLocalState) Msgsize() (s int) {
-	s = 1 + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.MapHeaderSize
-	if (*z).KeyValue != nil {
-		for zb0001, zb0002 := range (*z).KeyValue {
-			_ = zb0001
-			_ = zb0002
-			s += 0 + msgp.StringPrefixSize + len(zb0001) + zb0002.Msgsize()
-		}
-	}
+	s = 1 + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *AppLocalState) MsgIsZero() bool {
-	return (((*z).Schema.NumUint == 0) && ((*z).Schema.NumByteSlice == 0)) && (len((*z).KeyValue) == 0)
+	return (((*z).Schema.NumUint == 0) && ((*z).Schema.NumByteSlice == 0))
 }
 
 // MarshalMsg implements msgp.Marshaler
