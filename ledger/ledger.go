@@ -320,6 +320,14 @@ func (l *Ledger) GetLastCatchpointLabel() string {
 	return l.accts.getLastCatchpointLabel()
 }
 
+// GetStorageForRound gets the value for a particular key in some storage
+// associated with an application globally or locally
+func (l *Ledger) GetStorageForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.getStorageForRound(rnd, addr, aidx, global, key)
+}
+
 // GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
 // look up a creator address, setting ok to false if the query succeeded but no
 // creator was found.

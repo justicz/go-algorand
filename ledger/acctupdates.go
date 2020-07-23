@@ -84,6 +84,19 @@ type modifiedCreatable struct {
 	ndeltas int
 }
 
+type storageState uint64
+const (
+	allocatedState   storageState = 1
+	deallocatedState storageState = 2
+)
+
+type modifiedStorage struct {
+	state   storageState
+	kv      basics.TealKeyValue
+	counts  basics.StateSchema
+	ndeltas int
+}
+
 type accountUpdates struct {
 	// constant variables ( initialized on initialize, and never changed afterward )
 
@@ -128,9 +141,16 @@ type accountUpdates struct {
 	// creatableDeltas stores creatable updates for every round after dbRound.
 	creatableDeltas []map[basics.CreatableIndex]modifiedCreatable
 
+	// storageDeltas holds storage updates for every round after dbRound.
+	storageDeltas []map[addrApp]*storageDelta
+
 	// creatables stores the most recent state for every creatable that
 	// appears in creatableDeltas
 	creatables map[basics.CreatableIndex]modifiedCreatable
+
+	// storage stores the most recent storage for every storageDelta that
+	// appears in storageDeltas
+	storage map[addrApp]modifiedStorage
 
 	// protos stores consensus parameters dbRound and every
 	// round after it; i.e., protos is one longer than deltas.
@@ -247,6 +267,41 @@ func (au *accountUpdates) close() {
 		au.ctxCancel()
 	}
 	au.waitAccountsWriting()
+}
+
+func (au *accountUpdates) getStorageForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return basics.TealValue{}, false, err
+	}
+
+	// Check if this is the most recent round, in which case, we can
+	// use a cache of the most recent storage state.
+	aapp := addrApp{addr, aidx, global}
+	if offset == uint64(len(au.storageDeltas)) {
+		mstor, ok := au.storage[aapp]
+		if ok {
+			val, ok := mstor.kv[key]
+			return val, ok, nil
+		}
+	} else {
+		for offset > 0 {
+			au.log.Panicf("MAXJ historical getStorageForRound not implemented")
+		}
+	}
+
+	// Consult the database
+	kv, _, err := au.accountsq.lookupStorage(aapp)
+	if err == sql.ErrNoRows {
+		return basics.TealValue{}, false, nil
+	} else if err != nil {
+		return basics.TealValue{}, false, err
+	}
+
+	val, ok := kv[key]
+	return val, ok, nil
 }
 
 func (au *accountUpdates) lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
@@ -546,6 +601,7 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	au.deltas = append(au.deltas, delta.accts)
 	au.protos = append(au.protos, proto)
 	au.creatableDeltas = append(au.creatableDeltas, delta.creatables)
+	au.storageDeltas = append(au.storageDeltas, delta.sdeltas)
 	au.roundDigest = append(au.roundDigest, blk.Digest())
 	au.deltasAccum = append(au.deltasAccum, len(delta.accts)+au.deltasAccum[len(au.deltasAccum)-1])
 
@@ -571,6 +627,62 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 		mcreat.ctype = cdelta.ctype
 		mcreat.ndeltas++
 		au.creatables[cidx] = mcreat
+	}
+
+	for addrApp, sdelta := range delta.sdeltas {
+		au.log.Warnf("MAXJ: %s", addrApp.addr)
+		au.log.Warnf("MAXJ: %d", addrApp.aidx)
+		au.log.Warnf("MAXJ: %+v", sdelta.counts)
+		au.log.Warnf("MAXJ: %+v", sdelta.action)
+		au.log.Warnf("MAXJ: %+v", sdelta.kvCow)
+		au.log.Warnf("#######################")
+
+		// Grab any modifiedStorage for this addrApp already (might
+		// not exist)
+		mstor, ok := au.storage[addrApp]
+
+		// If we haven't seen a delta for this addrApp yet, and the
+		// delta is just keeping us in the allocated state, then we
+		// need to fill in our modifiedStorage key/value and counts
+		// from the database
+		if !ok && sdelta.action == remainAllocAction {
+			kv, counts, err := au.accountsq.lookupStorage(addrApp)
+			if err != nil {
+				au.log.Panicf("failed to fetch backing storage for %+v", addrApp)
+			}
+			mstor.kv = kv
+			mstor.counts = counts
+		}
+
+		// Bump the reference count
+		mstor.ndeltas++
+
+		// Overwrite the storage counts with the delta's (absolute)
+		// storage counts
+		mstor.counts = *sdelta.counts
+
+		// Based on the delta's action, update the state of the
+		// modifiedStorage and apply changes to its key/value
+		switch sdelta.action {
+		case remainAllocAction:
+			// remain allocated: don't clear key/value
+			mstor.state = allocatedState
+			applyKvDelta(mstor.kv, sdelta.kvCow, au.log)
+		case allocAction:
+			// allocate and apply changes
+			mstor.state = allocatedState
+			mstor.kv = make(basics.TealKeyValue)
+			applyKvDelta(mstor.kv, sdelta.kvCow, au.log)
+		case deallocAction:
+			// deallocate
+			mstor.state = deallocatedState
+			mstor.kv = nil
+		default:
+			au.log.Panic("accountUpdates: unknown storage action %v", sdelta.action)
+		}
+
+		// Write back our modified storage to the cache
+		au.storage[addrApp] = mstor
 	}
 
 	if ot.Overflowed {
@@ -743,8 +855,10 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	au.protos = []config.ConsensusParams{config.Consensus[hdr.CurrentProtocol]}
 	au.deltas = nil
 	au.creatableDeltas = nil
+	au.storageDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
 	au.creatables = make(map[basics.CreatableIndex]modifiedCreatable)
+	au.storage = make(map[addrApp]modifiedStorage)
 	au.deltasAccum = []int{0}
 
 	// keep these channel closed if we're not generating catchpoint
@@ -966,9 +1080,11 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	deltas := make([]map[basics.Address]accountDelta, offset, offset)
 	creatableDeltas := make([]map[basics.CreatableIndex]modifiedCreatable, offset, offset)
+	storageDeltas := make([]map[addrApp]*storageDelta, offset, offset)
 	roundTotals := make([]AccountTotals, offset+1, offset+1)
 	protos := make([]config.ConsensusParams, offset+1, offset+1)
 	copy(deltas, au.deltas[:offset])
+	copy(storageDeltas, au.storageDeltas[:offset])
 	copy(creatableDeltas, au.creatableDeltas[:offset])
 	copy(roundTotals, au.roundTotals[:offset+1])
 	copy(protos, au.protos[:offset+1])
@@ -1116,6 +1232,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.protos = au.protos[offset:]
 	au.roundTotals = au.roundTotals[offset:]
 	au.creatableDeltas = au.creatableDeltas[offset:]
+	au.storageDeltas = au.storageDeltas[offset:]
 	au.dbRound = newBase
 	au.lastFlushTime = flushTime
 
@@ -1278,4 +1395,28 @@ func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string
 		}
 	}
 	return
+}
+
+func applyKvDelta(kv basics.TealKeyValue, stateDelta basics.StateDelta, log logging.Logger) {
+	// Because the keys of stateDelta each correspond to one existing/new
+	// key in the key/value store, there can be at most one delta per key.
+	// Therefore the order that the deltas are applied does not matter.
+	for key, valueDelta := range stateDelta {
+		switch valueDelta.Action {
+		case basics.SetUintAction:
+			kv[key] = basics.TealValue{
+				Type: basics.TealUintType,
+				Uint: valueDelta.Uint,
+			}
+		case basics.SetBytesAction:
+			kv[key] = basics.TealValue{
+				Type:  basics.TealBytesType,
+				Bytes: valueDelta.Bytes,
+			}
+		case basics.DeleteAction:
+			delete(kv, key)
+		default:
+			log.Panicf("unknown delta action %d", valueDelta.Action)
+		}
+	}
 }

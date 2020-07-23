@@ -302,15 +302,15 @@ func ApplicationCall(ac *transactions.ApplicationCallTxnFields, header transacti
 	}
 
 	/*
-	// If this txn is going to set new programs (either for creation or
-	// update), check that the programs are valid and not too expensive
-	if ac.ApplicationID == 0 || ac.OnCompletion == UpdateApplicationOC {
-		maxCost := balances.ConsensusParams().MaxAppProgramCost
-		err = ac.checkPrograms(steva, maxCost)
-		if err != nil {
-			return err
+		// If this txn is going to set new programs (either for creation or
+		// update), check that the programs are valid and not too expensive
+		if ac.ApplicationID == 0 || ac.OnCompletion == UpdateApplicationOC {
+			maxCost := balances.ConsensusParams().MaxAppProgramCost
+			err = ac.checkPrograms(steva, maxCost)
+			if err != nil {
+				return err
+			}
 		}
-	}
 	*/
 
 	// Clear out our LocalState. In this case, we don't execute the
@@ -327,16 +327,19 @@ func ApplicationCall(ac *transactions.ApplicationCallTxnFields, header transacti
 			return fmt.Errorf("cannot clear state: %v is not currently opted in to app %d", header.Sender, appIdx)
 		}
 
-		pass, err := balances.StatefulEval(*evalParams, appIdx, params.ClearStateProgram)
-		if err != nil {
-			return err
-		}
+		// If the app still exists, run the ClearStateProgram
+		if exists {
+			pass, err := balances.StatefulEval(*evalParams, appIdx, params.ClearStateProgram)
+			if err != nil {
+				return err
+			}
 
-		// Fill in applyData, so that consumers don't have to implement a
-		// stateful TEAL interpreter to apply state changes
-		if pass {
-			// We will have applied any changes if and only if we passed
-			// ad.EvalDelta = evalDelta
+			// Fill in applyData, so that consumers don't have to implement a
+			// stateful TEAL interpreter to apply state changes
+			if pass {
+				// We will have applied any changes if and only if we passed
+				// ad.EvalDelta = evalDelta
+			}
 		}
 
 		return closeOutApplication(balances, header.Sender, appIdx)

@@ -101,7 +101,7 @@ func (x *roundCowBase) Allocated(addr basics.Address, aidx basics.AppIndex, glob
 }
 
 func (x *roundCowBase) GetStorage(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
-	return basics.TealValue{}, false, nil
+	return x.l.GetStorageForRound(x.rnd, addr, aidx, global, key)
 }
 
 // wrappers for roundCowState to satisfy the (current) transactions.Balances interface
@@ -214,6 +214,7 @@ type ledgerForEvaluator interface {
 	GetRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool)
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
+	GetStorageForRound(basics.Round, basics.Address, basics.AppIndex, bool, string) (basics.TealValue, bool, error)
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header

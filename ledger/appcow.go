@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
-func (cb *roundCowState) ensureStorageDelta(addr basics.Address, aidx basics.AppIndex, global bool) (*storageDelta, error) {
+func (cb *roundCowState) ensureStorageDelta(addr basics.Address, aidx basics.AppIndex, global bool, defaultAction storageAction) (*storageDelta, error) {
 	// If we already have a storageDelta, return it
 	aapp := addrApp{addr, aidx, global}
 	lsd, ok := cb.mods.sdeltas[aapp]
@@ -39,7 +39,7 @@ func (cb *roundCowState) ensureStorageDelta(addr basics.Address, aidx basics.App
 	}
 
 	lsd = &storageDelta{
-		action: noAction,
+		action: defaultAction,
 		kvCow:  make(basics.StateDelta),
 		counts: &counts,
 	}
@@ -110,7 +110,7 @@ func (cb *roundCowState) Allocate(addr basics.Address, aidx basics.AppIndex, glo
 		return err
 	}
 
-	lsd, err := cb.ensureStorageDelta(addr, aidx, global)
+	lsd, err := cb.ensureStorageDelta(addr, aidx, global, allocAction)
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func (cb *roundCowState) Deallocate(addr basics.Address, aidx basics.AppIndex, g
 		return err
 	}
 
-	lsd, err := cb.ensureStorageDelta(addr, aidx, global)
+	lsd, err := cb.ensureStorageDelta(addr, aidx, global, deallocAction)
 	if err != nil {
 		return err
 	}
@@ -163,9 +163,9 @@ func (cb *roundCowState) GetStorage(addr basics.Address, aidx basics.AppIndex, g
 			return val, ok, nil
 		}
 
-		// If this storage delta is noAction, then check our parent.
-		// Otherwise, the key does not exist.
-		if lsd.action == noAction {
+		// If this storage delta is remainAllocAction, then check our
+		// parent. Otherwise, the key does not exist.
+		if lsd.action == remainAllocAction {
 			// Check our parent
 			return cb.lookupParent.GetStorage(addr, aidx, global, key)
 		}
@@ -196,7 +196,7 @@ func (cb *roundCowState) SetStorage(addr basics.Address, aidx basics.AppIndex, g
 	}
 
 	// Write the value delta associated with this key/value
-	lsd, err := cb.ensureStorageDelta(addr, aidx, global)
+	lsd, err := cb.ensureStorageDelta(addr, aidx, global, remainAllocAction)
 	if err != nil {
 		return err
 	}
@@ -235,7 +235,7 @@ func (cb *roundCowState) DelStorage(addr basics.Address, aidx basics.AppIndex, g
 	}
 
 	// Write the value delta associated with deleting this key
-	lsd, err := cb.ensureStorageDelta(addr, aidx, global)
+	lsd, err := cb.ensureStorageDelta(addr, aidx, global, remainAllocAction)
 	if err != nil {
 		return nil
 	}

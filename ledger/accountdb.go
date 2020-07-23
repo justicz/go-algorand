@@ -34,6 +34,7 @@ import (
 type accountsDbQueries struct {
 	listCreatablesStmt           *sql.Stmt
 	lookupStmt                   *sql.Stmt
+	lookupStorageStmt            *sql.Stmt
 	lookupCreatorStmt            *sql.Stmt
 	deleteStoredCatchpoint       *sql.Stmt
 	insertStoredCatchpoint       *sql.Stmt
@@ -77,6 +78,12 @@ var accountsSchema = []string{
 		id string primary key,
 		intval integer,
 		strval text)`,
+	`CREATE TABLE IF NOT EXISTS storage (
+		owner blob primary key,
+		aidx integer,
+		global boolean,
+		denc blob
+	)`,
 }
 
 // TODO: Post applications, rename assetcreators -> creatables and rename
@@ -93,6 +100,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS storedcatchpoints`,
 	`DROP TABLE IF EXISTS catchpointstate`,
 	`DROP TABLE IF EXISTS accounthashes`,
+	`DROP TABLE IF EXISTS storage`,
 }
 
 type accountDelta struct {
@@ -307,6 +315,11 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 		return nil, err
 	}
 
+	qs.lookupStorageStmt, err = r.Prepare("SELECT denc FROM storage WHERE owner = ? AND aidx = ? AND global = ?")
+	if err != nil {
+		return nil, err
+	}
+
 	qs.lookupCreatorStmt, err = r.Prepare("SELECT creator FROM assetcreators WHERE asset = ? AND ctype = ?")
 	if err != nil {
 		return nil, err
@@ -375,6 +388,34 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 			cl.Type = ctype
 			results = append(results, cl)
 		}
+		return nil
+	})
+	return
+}
+
+func (qs *accountsDbQueries) lookupStorage(aapp addrApp) (kv basics.TealKeyValue, counts basics.StateSchema, err error) {
+	err = db.Retry(func() error {
+		var buf []byte
+		err := qs.lookupStorageStmt.QueryRow(aapp.addr, aapp.aidx, aapp.global).Scan(&buf)
+
+		if err != nil {
+			return err
+		}
+
+		err = protocol.Decode(buf, &kv)
+		if err != nil {
+			return err
+		}
+
+		if kv == nil {
+			kv = make(basics.TealKeyValue)
+		}
+
+		counts, err = kv.ToStateSchema()
+		if err != nil {
+			return err
+		}
+
 		return nil
 	})
 	return
