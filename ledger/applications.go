@@ -98,8 +98,7 @@ func (al *logicLedger) Round() basics.Round {
 }
 
 func (al *logicLedger) LatestTimestamp() int64 {
-	// TODO(refactor, implement this)
-	return 1234
+	return al.cow.mods.prevTimestamp
 }
 
 func (al *logicLedger) ApplicationID() basics.AppIndex {

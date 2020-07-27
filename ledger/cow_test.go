@@ -76,7 +76,7 @@ func TestCowBalance(t *testing.T) {
 	accts0 := randomAccounts(20)
 	ml := mockLedger{balanceMap: accts0}
 
-	c0 := makeRoundCowState(&ml, bookkeeping.BlockHeader{})
+	c0 := makeRoundCowState(&ml, bookkeeping.BlockHeader{}, 1234)
 	checkCow(t, c0, accts0)
 
 	c1 := c0.child()

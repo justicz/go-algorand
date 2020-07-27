@@ -288,7 +288,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		eval.block.BlockHeader.RewardsState = eval.prevHeader.NextRewardsState(hdr.Round, proto, incentivePoolData.MicroAlgos, prevTotals.RewardUnits())
 	}
 	// set the eval state with the current header
-	eval.state = makeRoundCowState(base, eval.block.BlockHeader)
+	eval.state = makeRoundCowState(base, eval.block.BlockHeader, eval.prevHeader.TimeStamp)
 
 	if validate {
 		err := eval.block.BlockHeader.PreCheck(eval.prevHeader)
@@ -835,7 +835,7 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 		delta: eval.state.mods,
 	}
 	eval.blockGenerated = true
-	eval.state = makeRoundCowState(eval.state, eval.block.BlockHeader)
+	eval.state = makeRoundCowState(eval.state, eval.block.BlockHeader, eval.prevHeader.TimeStamp)
 	return &vb, nil
 }
 

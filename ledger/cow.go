@@ -112,22 +112,26 @@ type StateDelta struct {
 	// new block header; read-only
 	hdr *bookkeeping.BlockHeader
 
+	// previous block timestamp
+	prevTimestamp int64
+
 	// storage deltas
 	sdeltas map[addrApp]*storageDelta
 }
 
-func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader) *roundCowState {
+func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64) *roundCowState {
 	return &roundCowState{
 		lookupParent: b,
 		commitParent: nil,
 		proto:        config.Consensus[hdr.CurrentProtocol],
 		mods: StateDelta{
-			accts:      make(map[basics.Address]accountDelta),
-			Txids:      make(map[transactions.Txid]basics.Round),
-			txleases:   make(map[txlease]basics.Round),
-			creatables: make(map[basics.CreatableIndex]modifiedCreatable),
-			sdeltas:    make(map[addrApp]*storageDelta),
-			hdr:        &hdr,
+			accts:         make(map[basics.Address]accountDelta),
+			Txids:         make(map[transactions.Txid]basics.Round),
+			txleases:      make(map[txlease]basics.Round),
+			creatables:    make(map[basics.CreatableIndex]modifiedCreatable),
+			sdeltas:       make(map[addrApp]*storageDelta),
+			hdr:           &hdr,
+			prevTimestamp: prevTimestamp,
 		},
 	}
 }
@@ -212,12 +216,13 @@ func (cb *roundCowState) child() *roundCowState {
 		commitParent: cb,
 		proto:        cb.proto,
 		mods: StateDelta{
-			accts:      make(map[basics.Address]accountDelta),
-			Txids:      make(map[transactions.Txid]basics.Round),
-			txleases:   make(map[txlease]basics.Round),
-			creatables: make(map[basics.CreatableIndex]modifiedCreatable),
-			sdeltas:    make(map[addrApp]*storageDelta),
-			hdr:        cb.mods.hdr,
+			accts:         make(map[basics.Address]accountDelta),
+			Txids:         make(map[transactions.Txid]basics.Round),
+			txleases:      make(map[txlease]basics.Round),
+			creatables:    make(map[basics.CreatableIndex]modifiedCreatable),
+			sdeltas:       make(map[addrApp]*storageDelta),
+			hdr:           cb.mods.hdr,
+			prevTimestamp: cb.mods.prevTimestamp,
 		},
 	}
 }
