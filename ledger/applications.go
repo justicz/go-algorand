@@ -118,11 +118,11 @@ func (al *logicLedger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key
 }
 
 func (al *logicLedger) SetLocal(addr basics.Address, key string, value basics.TealValue) error {
-	return al.cow.SetStorage(addr, al.aidx, false, key, value)
+	return al.cow.SetKey(addr, al.aidx, false, key, value)
 }
 
 func (al *logicLedger) DelLocal(addr basics.Address, key string) error {
-	return al.cow.DelStorage(addr, al.aidx, false, key)
+	return al.cow.DelKey(addr, al.aidx, false, key)
 }
 
 func (al *logicLedger) fetchAppCreator(appIdx basics.AppIndex) (basics.Address, error) {
@@ -149,9 +149,9 @@ func (al *logicLedger) GetGlobal(appIdx basics.AppIndex, key string) (basics.Tea
 }
 
 func (al *logicLedger) SetGlobal(key string, value basics.TealValue) error {
-	return al.cow.SetStorage(al.creator, al.aidx, true, key, value)
+	return al.cow.SetKey(al.creator, al.aidx, true, key, value)
 }
 
 func (al *logicLedger) DelGlobal(key string) error {
-	return al.cow.DelStorage(al.creator, al.aidx, true, key)
+	return al.cow.DelKey(al.creator, al.aidx, true, key)
 }

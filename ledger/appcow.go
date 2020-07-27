@@ -178,7 +178,7 @@ func (cb *roundCowState) GetKey(addr basics.Address, aidx basics.AppIndex, globa
 	return cb.lookupParent.GetKey(addr, aidx, global, key)
 }
 
-func (cb *roundCowState) SetStorage(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue) error {
+func (cb *roundCowState) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue) error {
 	// Check that account has allocated storage
 	allocated, err := cb.Allocated(addr, aidx, global)
 	if err != nil {
@@ -217,7 +217,7 @@ func (cb *roundCowState) SetStorage(addr basics.Address, aidx basics.AppIndex, g
 	return nil
 }
 
-func (cb *roundCowState) DelStorage(addr basics.Address, aidx basics.AppIndex, global bool, key string) error {
+func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) error {
 	// Check that account has allocated storage
 	allocated, err := cb.Allocated(addr, aidx, global)
 	if err != nil {
