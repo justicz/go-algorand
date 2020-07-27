@@ -257,6 +257,28 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	return nil
 }
 
+func checkPrograms(ac *transactions.ApplicationCallTxnFields, evalParams *logic.EvalParams, maxCost int) error {
+	cost, err := logic.CheckStateful(ac.ApprovalProgram, *evalParams)
+	if err != nil {
+		return fmt.Errorf("check failed on ApprovalProgram: %v", err)
+	}
+
+	if cost > maxCost {
+		return fmt.Errorf("ApprovalProgram too resource intensive. Cost is %d, max %d", cost, maxCost)
+	}
+
+	cost, err = logic.CheckStateful(ac.ClearStateProgram, *evalParams)
+	if err != nil {
+		return fmt.Errorf("check failed on ClearStateProgram: %v", err)
+	}
+
+	if cost > maxCost {
+		return fmt.Errorf("ClearStateProgram too resource intensive. Cost is %d, max %d", cost, maxCost)
+	}
+
+	return nil
+}
+
 func ApplicationCall(ac *transactions.ApplicationCallTxnFields, header transactions.Header, balances Balances, ad *transactions.ApplyData, evalParams *logic.EvalParams, txnCounter uint64) (err error) {
 	defer func() {
 		// If we are returning a non-nil error, then don't return a
@@ -301,17 +323,15 @@ func ApplicationCall(ac *transactions.ApplicationCallTxnFields, header transacti
 		return fmt.Errorf("only clearing out is supported for applications that do not exist")
 	}
 
-	/*
-		// If this txn is going to set new programs (either for creation or
-		// update), check that the programs are valid and not too expensive
-		if ac.ApplicationID == 0 || ac.OnCompletion == UpdateApplicationOC {
-			maxCost := balances.ConsensusParams().MaxAppProgramCost
-			err = ac.checkPrograms(steva, maxCost)
-			if err != nil {
-				return err
-			}
+	// If this txn is going to set new programs (either for creation or
+	// update), check that the programs are valid and not too expensive
+	if ac.ApplicationID == 0 || ac.OnCompletion == transactions.UpdateApplicationOC {
+		maxCost := balances.ConsensusParams().MaxAppProgramCost
+		err = checkPrograms(ac, evalParams, maxCost)
+		if err != nil {
+			return err
 		}
-	*/
+	}
 
 	// Clear out our LocalState. In this case, we don't execute the
 	// ApprovalProgram, since clearing out is always allowed. We only
