@@ -23,12 +23,8 @@ type Balances interface {
 	// GetCreator gets the address of the account that created a given creatable
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 
-	Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
 	Allocate(addr basics.Address, aidx basics.AppIndex, global bool) error
 	Deallocate(addr basics.Address, aidx basics.AppIndex, global bool) error
-	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error)
-	SetStorage(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue) error
-	DelStorage(addr basics.Address, aidx basics.AppIndex, global bool, key string) error
 	StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, evalDelta basics.EvalDelta, err error)
 
 	// Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
