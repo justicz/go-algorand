@@ -320,12 +320,20 @@ func (l *Ledger) GetLastCatchpointLabel() string {
 	return l.accts.getLastCatchpointLabel()
 }
 
-// GetStorageForRound gets the value for a particular key in some storage
+// GetKeyForRound gets the value for a particular key in some storage
 // associated with an application globally or locally
-func (l *Ledger) GetStorageForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+func (l *Ledger) GetKeyForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getStorageForRound(rnd, addr, aidx, global, key)
+	return l.accts.getKeyForRound(rnd, addr, aidx, global, key)
+}
+
+// CountStorageForRound counts the storage types used by some account
+// associated with an application globally or locally
+func (l *Ledger) CountStorageForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.countStorageForRound(rnd, addr, aidx, global)
 }
 
 // GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to

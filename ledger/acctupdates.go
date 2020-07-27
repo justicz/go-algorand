@@ -85,6 +85,7 @@ type modifiedCreatable struct {
 }
 
 type storageState uint64
+
 const (
 	allocatedState   storageState = 1
 	deallocatedState storageState = 2
@@ -269,7 +270,7 @@ func (au *accountUpdates) close() {
 	au.waitAccountsWriting()
 }
 
-func (au *accountUpdates) getStorageForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+func (au *accountUpdates) getKeyForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
 	offset, err := au.roundOffset(rnd)
@@ -288,20 +289,38 @@ func (au *accountUpdates) getStorageForRound(rnd basics.Round, addr basics.Addre
 		}
 	} else {
 		for offset > 0 {
-			au.log.Panicf("MAXJ historical getStorageForRound not implemented")
+			au.log.Panicf("MAXJ historical getKeyForRound not implemented")
 		}
 	}
 
 	// Consult the database
-	kv, _, err := au.accountsq.lookupStorage(aapp)
-	if err == sql.ErrNoRows {
-		return basics.TealValue{}, false, nil
-	} else if err != nil {
-		return basics.TealValue{}, false, err
+	return au.accountsq.lookupKey(aapp, key)
+}
+
+func (au *accountUpdates) countStorageForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return basics.StateSchema{}, err
 	}
 
-	val, ok := kv[key]
-	return val, ok, nil
+	// Check if this is the most recent round, in which case, we can
+	// use a cache of the most recent storage state.
+	aapp := addrApp{addr, aidx, global}
+	if offset == uint64(len(au.storageDeltas)) {
+		mstor, ok := au.storage[aapp]
+		if ok {
+			return mstor.counts, nil
+		}
+	} else {
+		for offset > 0 {
+			au.log.Panicf("MAXJ historical countStorageForRound not implemented")
+		}
+	}
+
+	// Consult the database
+	return au.accountsq.countStorage(aapp)
 }
 
 func (au *accountUpdates) lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
@@ -645,6 +664,11 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 		// delta is just keeping us in the allocated state, then we
 		// need to fill in our modifiedStorage key/value and counts
 		// from the database
+		//
+		// TODO(refactor) is it OK that these lookups are not in a transaction?
+		// Could database updates occur part way through this loop? I think we
+		// should be OK because dbRound is updated only when accountsMu is held,
+		// and it is also held here.
 		if !ok && sdelta.action == remainAllocAction {
 			kv, counts, err := au.accountsq.lookupStorage(addrApp)
 			if err != nil {
@@ -1094,6 +1118,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	// au.accounts.
 	flushcount := make(map[basics.Address]int)
 	creatableFlushcount := make(map[basics.CreatableIndex]int)
+	storageFlushcount := make(map[addrApp]int)
 
 	var committedRoundDigest crypto.Digest
 
@@ -1118,6 +1143,9 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 		for cidx := range creatableDeltas[i] {
 			creatableFlushcount[cidx] = creatableFlushcount[cidx] + 1
+		}
+		for aapp := range storageDeltas[i] {
+			storageFlushcount[aapp] = storageFlushcount[aapp] + 1
 		}
 	}
 
@@ -1153,6 +1181,12 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			if err != nil {
 				return err
 			}
+
+			err = storageNewRound(tx, storageDeltas[i], au.log)
+			if err != nil {
+				return err
+			}
+
 		}
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
 		if isCatchpointRound {
@@ -1223,6 +1257,24 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			delete(au.creatables, cidx)
 		} else {
 			au.creatables[cidx] = mcreat
+		}
+	}
+
+	for aapp, cnt := range storageFlushcount {
+		mstor, ok := au.storage[aapp]
+		if !ok {
+			au.log.Panicf("inconsistency: flushed %d changes to storage %+v, but not in au.storage", cnt, aapp)
+		}
+
+		if cnt > mstor.ndeltas {
+			au.log.Panicf("inconsistency: flushed %d changes to storage %+v, but au.storage had %d", cnt, aapp, mstor.ndeltas)
+		}
+
+		mstor.ndeltas -= cnt
+		if mstor.ndeltas == 0 {
+			delete(au.storage, aapp)
+		} else {
+			au.storage[aapp] = mstor
 		}
 	}
 

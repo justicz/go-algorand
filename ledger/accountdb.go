@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -34,7 +35,9 @@ import (
 type accountsDbQueries struct {
 	listCreatablesStmt           *sql.Stmt
 	lookupStmt                   *sql.Stmt
+	lookupKeyStmt                *sql.Stmt
 	lookupStorageStmt            *sql.Stmt
+	countStorageStmt             *sql.Stmt
 	lookupCreatorStmt            *sql.Stmt
 	deleteStoredCatchpoint       *sql.Stmt
 	insertStoredCatchpoint       *sql.Stmt
@@ -82,7 +85,10 @@ var accountsSchema = []string{
 		owner blob primary key,
 		aidx integer,
 		global boolean,
-		denc blob
+		key blob,
+		vtype integer,
+		venc blob,
+		UNIQUE(owner, aidx, global, key)
 	)`,
 }
 
@@ -315,7 +321,17 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 		return nil, err
 	}
 
-	qs.lookupStorageStmt, err = r.Prepare("SELECT denc FROM storage WHERE owner = ? AND aidx = ? AND global = ?")
+	qs.lookupKeyStmt, err = r.Prepare("SELECT venc FROM storage WHERE owner = ? AND aidx = ? AND global = ? AND key = ?")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.lookupStorageStmt, err = r.Prepare("SELECT key, venc FROM storage WHERE owner = ? AND aidx = ? AND global = ?")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.countStorageStmt, err = r.Prepare("SELECT COUNT(*) FROM storage WHERE owner = ? AND aidx = ? AND global = ? AND vtype = ?")
 	if err != nil {
 		return nil, err
 	}
@@ -393,28 +409,86 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 	return
 }
 
-func (qs *accountsDbQueries) lookupStorage(aapp addrApp) (kv basics.TealKeyValue, counts basics.StateSchema, err error) {
+func (qs *accountsDbQueries) lookupKey(aapp addrApp, key string) (val basics.TealValue, ok bool, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
-		err := qs.lookupStorageStmt.QueryRow(aapp.addr, aapp.aidx, aapp.global).Scan(&buf)
+		err := qs.lookupKeyStmt.QueryRow(aapp.addr, aapp.aidx, aapp.global, key).Scan(&buf)
+		// Common error: entry does not exist
+		if err == sql.ErrNoRows {
+			return nil
+		}
 
+		// Some other database error
 		if err != nil {
 			return err
 		}
 
-		err = protocol.Decode(buf, &kv)
+		err = protocol.Decode(buf, &val)
 		if err != nil {
 			return err
 		}
 
-		if kv == nil {
-			kv = make(basics.TealKeyValue)
+		// Got a legitimate value
+		ok = true
+
+		return nil
+	})
+	return
+}
+
+func (qs *accountsDbQueries) lookupStorage(aapp addrApp) (kv basics.TealKeyValue, counts basics.StateSchema, err error) {
+	rows, err := qs.lookupStorageStmt.Query(aapp.addr, aapp.aidx, aapp.global)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	kv = make(basics.TealKeyValue)
+	for rows.Next() {
+		var key, venc []byte
+		err = rows.Scan(&key, &venc)
+		if err != nil {
+			return
 		}
 
-		counts, err = kv.ToStateSchema()
+		var val basics.TealValue
+		err = protocol.Decode(venc, &val)
+		if err != nil {
+			return
+		}
+
+		switch val.Type {
+		case basics.TealBytesType:
+			counts.NumByteSlice++
+		case basics.TealUintType:
+			counts.NumUint++
+		default:
+			err = fmt.Errorf("unexpected teal type %v for %+v", val.Type, aapp)
+			return
+		}
+
+		kv[string(key)] = val
+	}
+
+	err = rows.Err()
+	return
+}
+
+func (qs *accountsDbQueries) countStorage(aapp addrApp) (schema basics.StateSchema, err error) {
+	err = db.Retry(func() error {
+		var bytesCount, uintCount uint64
+		err := qs.countStorageStmt.QueryRow(aapp.addr, aapp.aidx, aapp.global, basics.TealBytesType).Scan(&bytesCount)
 		if err != nil {
 			return err
 		}
+
+		err = qs.countStorageStmt.QueryRow(aapp.addr, aapp.aidx, aapp.global, basics.TealUintType).Scan(&uintCount)
+		if err != nil {
+			return err
+		}
+
+		schema.NumByteSlice = bytesCount
+		schema.NumUint = uintCount
 
 		return nil
 	})
@@ -699,6 +773,80 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creat
 	}
 
 	return
+}
+
+func storageNewRound(tx *sql.Tx, sdeltas map[addrApp]*storageDelta, log logging.Logger) (err error) {
+	replaceKeyStmt, err := tx.Prepare("REPLACE INTO storage (owner, aidx, global, key, vtype, venc) VALUES (?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		return
+	}
+	defer replaceKeyStmt.Close()
+
+	deleteKeyStmt, err := tx.Prepare("DELETE FROM storage WHERE owner=? AND aidx=? AND global=? AND key=?")
+	if err != nil {
+		return
+	}
+	defer deleteKeyStmt.Close()
+
+	deallocStmt, err := tx.Prepare("DELETE FROM storage WHERE owner=? AND aidx=? AND global=?")
+	if err != nil {
+		return
+	}
+	defer deallocStmt.Close()
+
+	for aapp, sdelta := range sdeltas {
+		// For both alloc and dealloc, clear all existing storage.
+		switch sdelta.action {
+		case allocAction:
+			fallthrough
+		case deallocAction:
+			// deallocate existing storage
+			_, err = deallocStmt.Exec(aapp.addr, aapp.aidx, aapp.global)
+			if err != nil {
+				return
+			}
+			if len(sdelta.kvCow) > 0 {
+				log.Warnf("storageNewRound: kvCow len > 0 but dealloc? %+v %+v", aapp, sdelta)
+			}
+		case remainAllocAction:
+			// noop
+		default:
+			log.Panic("storageNewRound: unknown storage action %v", sdelta.action)
+		}
+
+		// Then, apply any key/value deltas
+		for key, vdelta := range sdelta.kvCow {
+			tv, tvok := vdelta.ToTealValue()
+			switch vdelta.Action {
+			case basics.SetUintAction:
+				if !tvok {
+					log.Panic("storageNewRound: failed to encode tv: %v", vdelta)
+				}
+				venc := protocol.Encode(&tv)
+				_, err = replaceKeyStmt.Exec(aapp.addr, aapp.aidx, aapp.global, key, basics.TealUintType, venc)
+				if err != nil {
+					return
+				}
+			case basics.SetBytesAction:
+				if !tvok {
+					log.Panic("storageNewRound: failed to encode tv: %v", vdelta)
+				}
+				venc := protocol.Encode(&tv)
+				_, err = replaceKeyStmt.Exec(aapp.addr, aapp.aidx, aapp.global, key, basics.TealBytesType, venc)
+				if err != nil {
+					return
+				}
+			case basics.DeleteAction:
+				_, err = deleteKeyStmt.Exec(aapp.addr, aapp.aidx, aapp.global, key)
+				if err != nil {
+					return
+				}
+			default:
+				log.Panic("storageNewRound: unknown delta action %v", vdelta.Action)
+			}
+		}
+	}
+	return nil
 }
 
 // updates the round number associated with the current account data.

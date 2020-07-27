@@ -39,7 +39,7 @@ type roundCowParent interface {
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
 	Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
-	GetStorage(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error)
+	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error)
 }
 
 type roundCowState struct {

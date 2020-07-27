@@ -141,7 +141,7 @@ func (cb *roundCowState) Deallocate(addr basics.Address, aidx basics.AppIndex, g
 	return nil
 }
 
-func (cb *roundCowState) GetStorage(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+func (cb *roundCowState) GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
 	// Check that account has allocated storage
 	allocated, err := cb.Allocated(addr, aidx, global)
 	if err != nil {
@@ -167,7 +167,7 @@ func (cb *roundCowState) GetStorage(addr basics.Address, aidx basics.AppIndex, g
 		// parent. Otherwise, the key does not exist.
 		if lsd.action == remainAllocAction {
 			// Check our parent
-			return cb.lookupParent.GetStorage(addr, aidx, global, key)
+			return cb.lookupParent.GetKey(addr, aidx, global, key)
 		}
 
 		return basics.TealValue{}, false, nil
@@ -175,7 +175,7 @@ func (cb *roundCowState) GetStorage(addr basics.Address, aidx basics.AppIndex, g
 
 	// At this point, we know we're allocated, and we don't have a delta,
 	// so we should check our parent.
-	return cb.lookupParent.GetStorage(addr, aidx, global, key)
+	return cb.lookupParent.GetKey(addr, aidx, global, key)
 }
 
 func (cb *roundCowState) SetStorage(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue) error {
@@ -190,7 +190,7 @@ func (cb *roundCowState) SetStorage(addr basics.Address, aidx basics.AppIndex, g
 	}
 
 	// Fetch the old value + presence so we know how to update counts
-	oldValue, oldOk, err := cb.GetStorage(addr, aidx, global, key)
+	oldValue, oldOk, err := cb.GetKey(addr, aidx, global, key)
 	if err != nil {
 		return err
 	}
@@ -203,7 +203,7 @@ func (cb *roundCowState) SetStorage(addr basics.Address, aidx basics.AppIndex, g
 	lsd.kvCow[key] = value.ToValueDelta()
 
 	// Fetch the new value + presence so we know how to update counts
-	newValue, newOk, err := cb.GetStorage(addr, aidx, global, key)
+	newValue, newOk, err := cb.GetKey(addr, aidx, global, key)
 	if err != nil {
 		return err
 	}
@@ -229,7 +229,7 @@ func (cb *roundCowState) DelStorage(addr basics.Address, aidx basics.AppIndex, g
 	}
 
 	// Fetch the old value + presence so we know how to update counts
-	oldValue, oldOk, err := cb.GetStorage(addr, aidx, global, key)
+	oldValue, oldOk, err := cb.GetKey(addr, aidx, global, key)
 	if err != nil {
 		return err
 	}
@@ -245,7 +245,7 @@ func (cb *roundCowState) DelStorage(addr basics.Address, aidx basics.AppIndex, g
 	}
 
 	// Fetch the new value + presence so we know how to update counts
-	newValue, newOk, err := cb.GetStorage(addr, aidx, global, key)
+	newValue, newOk, err := cb.GetKey(addr, aidx, global, key)
 	if err != nil {
 		return err
 	}

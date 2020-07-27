@@ -26,7 +26,7 @@ type Balances interface {
 	Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
 	Allocate(addr basics.Address, aidx basics.AppIndex, global bool) error
 	Deallocate(addr basics.Address, aidx basics.AppIndex, global bool) error
-	GetStorage(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error)
+	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error)
 	SetStorage(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue) error
 	DelStorage(addr basics.Address, aidx basics.AppIndex, global bool, key string) error
 	StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, err error)

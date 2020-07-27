@@ -35,7 +35,7 @@ func makeLogicLedger(cow *roundCowState, aidx basics.AppIndex) (*logicLedger, er
 
 	al := &logicLedger{
 		aidx: aidx,
-		cow: cow,
+		cow:  cow,
 	}
 
 	// Fetch app creator so we don't have to look it up every time we get/set/del
@@ -114,7 +114,7 @@ func (al *logicLedger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key
 	if appIdx == basics.AppIndex(0) {
 		appIdx = al.aidx
 	}
-	return al.cow.GetStorage(addr, appIdx, false, key)
+	return al.cow.GetKey(addr, appIdx, false, key)
 }
 
 func (al *logicLedger) SetLocal(addr basics.Address, key string, value basics.TealValue) error {
@@ -145,7 +145,7 @@ func (al *logicLedger) GetGlobal(appIdx basics.AppIndex, key string) (basics.Tea
 	if err != nil {
 		return basics.TealValue{}, false, err
 	}
-	return al.cow.GetStorage(addr, appIdx, true, key)
+	return al.cow.GetKey(addr, appIdx, true, key)
 }
 
 func (al *logicLedger) SetGlobal(key string, value basics.TealValue) error {
