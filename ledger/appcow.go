@@ -259,26 +259,61 @@ func (cb *roundCowState) DelStorage(addr basics.Address, aidx basics.AppIndex, g
 	return nil
 }
 
-func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (pass bool, err error) {
+func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (pass bool, evalDelta basics.EvalDelta, err error) {
 	// Make a child cow to eval our program in
 	calf := cb.child()
 	params.Ledger, err = makeLogicLedger(calf, aidx)
 	if err != nil {
-		return false, err
+		return false, basics.EvalDelta{}, err
 	}
 
 	// Eval the program
 	pass, err = logic.EvalStateful(program, params)
 	if err != nil {
-		return false, err
+		return false, basics.EvalDelta{}, err
 	}
 
-	// If program passed, commit to state changes
+	// If program passed, build our eval delta and commit to state changes
 	if pass {
+		foundGlobal := false
+		for aapp, sdelta := range calf.mods.sdeltas {
+			// Check that all of these deltas are for the correct app
+			if aapp.aidx != aidx {
+				err = fmt.Errorf("found storage delta for different app during StatefulEval: %d != %d", aapp.aidx, aidx)
+				return false, basics.EvalDelta{}, err
+			}
+			if aapp.global {
+				// Check that there is at most one global delta
+				if foundGlobal {
+					err = fmt.Errorf("found more than one global delta during StatefulEval: %d")
+					return false, basics.EvalDelta{}, err
+				}
+				evalDelta.GlobalDelta = sdelta.kvCow.Clone()
+				foundGlobal = true
+			} else {
+				if evalDelta.LocalDeltas == nil {
+					evalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
+				}
+				// It is impossible for there to be more than one local delta for
+				// a particular (address, app ID) in sdeltas, because the appAddr
+				// type consists only of (address, appID, global=false). So if
+				// IndexByAddress is deterministic (and it is), there is no need
+				// to check for duplicates here.
+				//
+				// TODO(app refactor): minimize eval deltas
+				var addrOffset uint64
+				sender := params.Txn.Txn.Sender
+				addrOffset, err = params.Txn.Txn.IndexByAddress(aapp.addr, sender)
+				if err != nil {
+					return false, basics.EvalDelta{}, err
+				}
+				evalDelta.LocalDeltas[addrOffset] = sdelta.kvCow.Clone()
+			}
+		}
 		calf.commitToParent()
 	}
 
-	return pass, nil
+	return pass, evalDelta, nil
 }
 
 func updateCounts(lsd *storageDelta, bv basics.TealValue, bok bool, av basics.TealValue, aok bool) error {

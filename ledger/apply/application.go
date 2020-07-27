@@ -329,7 +329,7 @@ func ApplicationCall(ac *transactions.ApplicationCallTxnFields, header transacti
 
 		// If the app still exists, run the ClearStateProgram
 		if exists {
-			pass, err := balances.StatefulEval(*evalParams, appIdx, params.ClearStateProgram)
+			pass, evalDelta, err := balances.StatefulEval(*evalParams, appIdx, params.ClearStateProgram)
 			if err != nil {
 				return err
 			}
@@ -338,7 +338,7 @@ func ApplicationCall(ac *transactions.ApplicationCallTxnFields, header transacti
 			// stateful TEAL interpreter to apply state changes
 			if pass {
 				// We will have applied any changes if and only if we passed
-				// ad.EvalDelta = evalDelta
+				ad.EvalDelta = evalDelta
 			}
 		}
 
@@ -356,7 +356,7 @@ func ApplicationCall(ac *transactions.ApplicationCallTxnFields, header transacti
 	}
 
 	// Execute the Approval program
-	approved, err := balances.StatefulEval(*evalParams, appIdx, params.ApprovalProgram)
+	approved, evalDelta, err := balances.StatefulEval(*evalParams, appIdx, params.ApprovalProgram)
 	if err != nil {
 		return err
 	}
@@ -397,6 +397,10 @@ func ApplicationCall(ac *transactions.ApplicationCallTxnFields, header transacti
 	default:
 		return fmt.Errorf("invalid application action")
 	}
+
+	// Fill in applyData, so that consumers don't have to implement a
+	// stateful TEAL interpreter to apply state changes
+	ad.EvalDelta = evalDelta
 
 	return nil
 }

@@ -29,7 +29,7 @@ type Balances interface {
 	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error)
 	SetStorage(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue) error
 	DelStorage(addr basics.Address, aidx basics.AppIndex, global bool, key string) error
-	StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, err error)
+	StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, evalDelta basics.EvalDelta, err error)
 
 	// Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
 	// TODO: Does this need to be part of the balances interface, or can it just be implemented here as a function that calls Put and Get?
